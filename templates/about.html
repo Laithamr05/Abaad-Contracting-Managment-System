@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - Abaad Contracting Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% include 'navbar.html' %}
+    
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>About Abaad Contracting Management System</h1>
+                <hr>
+                
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h3>Overview</h3>
+                        <p>
+                            The Abaad Contracting Management System (ACMS) is a comprehensive web-based application 
+                            designed to manage all aspects of a contracting company's operations. The system provides 
+                            tools for managing branches, employees, departments, projects, clients, suppliers, and materials.
+                        </p>
+                        
+                        <h3 class="mt-4">Key Features</h3>
+                        <ul>
+                            <li><strong>Branch Management:</strong> Manage multiple office locations and branches</li>
+                            <li><strong>Employee Management:</strong> Track employees, their positions, salaries, and reporting structures</li>
+                            <li><strong>Department Management:</strong> Organize employees into departments with assigned managers</li>
+                            <li><strong>Project Management:</strong> Manage projects, their locations, costs, and revenues</li>
+                            <li><strong>Client Management:</strong> Maintain client information and relationships</li>
+                            <li><strong>Material & Supplier Management:</strong> Track materials, suppliers, and pricing</li>
+                            <li><strong>Work Assignments:</strong> Assign employees to projects with roles and hours</li>
+                            <li><strong>Advanced Reporting:</strong> Generate comprehensive reports and analytics</li>
+                        </ul>
+                        
+                        <h3 class="mt-4">Technology Stack</h3>
+                        <ul>
+                            <li><strong>Backend:</strong> Flask (Python web framework)</li>
+                            <li><strong>Database:</strong> MySQL (InnoDB engine)</li>
+                            <li><strong>Frontend:</strong> Bootstrap 5, HTML5, CSS3, JavaScript</li>
+                            <li><strong>Database Connector:</strong> mysql-connector-python</li>
+                        </ul>
+                        
+                        <h3 class="mt-4">Database Schema</h3>
+                        <p>
+                            The system uses a relational database design with 10 main entities and proper foreign key 
+                            relationships. All money fields use DECIMAL(12,2) for precision, and indexes are created 
+                            on all foreign key columns for optimal performance.
+                        </p>
+                        
+                        <p class="mt-4">
+                            For detailed database documentation, see <a href="{{ url_for('index') }}">ERD.md</a> in the docs folder.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+</body>
+</html>
+
