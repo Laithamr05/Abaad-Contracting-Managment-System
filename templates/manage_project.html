@@ -30,9 +30,9 @@
                                 <p><strong>Client:</strong> {{ project.ClientName }}</p>
                             </div>
                             <div class="col-md-6">
-                                <p><strong>Cost:</strong> SAR {{ "{:,}".format(project.Cost|int) }}</p>
-                                <p><strong>Revenue:</strong> SAR {{ "{:,}".format(project.Revenue|int) }}</p>
-                                <p><strong>Expected Profit:</strong> SAR {{ "{:,}".format((project.Revenue|int - project.Cost|int)) }}</p>
+                                <p><strong>Cost:</strong> ILS {{ "{:,}".format(project.Cost|int) }}</p>
+                                <p><strong>Revenue:</strong> ILS {{ "{:,}".format(project.Revenue|int) }}</p>
+                                <p><strong>Expected Profit:</strong> ILS {{ "{:,}".format((project.Revenue|int - project.Cost|int)) }}</p>
                             </div>
                         </div>
                     </div>
@@ -99,20 +99,14 @@
                                     <td>{{ material.MaterialName }}</td>
                                     <td>{{ material.Quantity }}</td>
                                     <td>{{ material.UnitOfMeasure }}</td>
-                                    <td>SAR {{ "{:,.2f}".format(material.UnitPrice|float) }}</td>
-                                    <td>SAR {{ "{:,.2f}".format((material.Quantity|float * material.UnitPrice|float)) }}</td>
+                                    <td>ILS {{ "{:,.2f}".format(material.UnitPrice|float) }}</td>
+                                    <td>ILS {{ "{:,.2f}".format((material.Quantity|float * material.UnitPrice|float)) }}</td>
                                 </tr>
                                 {% endfor %}
                                 {% if materials %}
                                 <tr class="table-info">
                                     <td colspan="4"><strong>Total Material Cost</strong></td>
-                                    <td><strong>
-                                        {% set total = 0.0 %}
-                                        {% for m in materials %}
-                                            {% set total = total + (m.Quantity|float * m.UnitPrice|float) %}
-                                        {% endfor %}
-                                        SAR {{ "{:,.2f}".format(total) }}
-                                    </strong></td>
+                                    <td><strong>ILS {{ "{:,.2f}".format(total_material_cost) }}</strong></td>
                                 </tr>
                                 {% endif %}
                             </tbody>

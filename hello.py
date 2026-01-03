@@ -82,28 +82,6 @@ def index():
     
     return render_template('index.html', stats=stats[0] if stats else {}, recent_projects=recent_projects)
 
-@app.route('/about')
-def about():
-    """About page"""
-    return render_template('about.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """Simple login page (optional authentication)"""
-    if request.method == 'POST':
-        # Simple authentication (can be enhanced)
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        # For demo purposes, accept any credentials
-        if username and password:
-            flash('Login successful!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Please enter both username and password', 'error')
-    
-    return render_template('login.html')
-
 @app.route('/error')
 def error_page():
     """Error page"""
@@ -153,28 +131,30 @@ def employees():
     """List and manage employees"""
     query = """
         SELECT e.*, b.BranchName, d.DepartmentName,
-               m.EmployeeName as ManagerName
+               m.EmployeeName as ManagerName, r.Title as Position
         FROM Employee e
         JOIN Branch b ON e.BranchID = b.BranchID
         JOIN Department d ON e.DepartmentID = d.DepartmentID
+        JOIN Role r ON e.PositionID = r.RoleID
         LEFT JOIN Employee m ON e.ManagerID = m.EmployeeID
         ORDER BY e.EmployeeName
     """
     employees = execute_query(query) or []
     
-    # Get branches and departments for forms
+    # Get branches, departments, roles, and managers for forms
     branches = execute_query("SELECT BranchID, BranchName FROM Branch ORDER BY BranchName") or []
     departments = execute_query("SELECT DepartmentID, DepartmentName FROM Department ORDER BY DepartmentName") or []
+    roles = execute_query("SELECT RoleID, Title FROM Role ORDER BY Title") or []
     managers = execute_query("SELECT EmployeeID, EmployeeName FROM Employee WHERE IsManager = TRUE ORDER BY EmployeeName") or []
     
     return render_template('employees.html', employees=employees, branches=branches, 
-                         departments=departments, managers=managers)
+                         departments=departments, roles=roles, managers=managers)
 
 @app.route('/employees/add', methods=['POST'])
 def add_employee():
     """Add a new employee"""
     name = request.form.get('employee_name')
-    position = request.form.get('position')
+    position_id = request.form.get('position_id')
     salary = request.form.get('salary')
     branch_id = request.form.get('branch_id')
     dept_id = request.form.get('department_id')
@@ -182,10 +162,10 @@ def add_employee():
     is_manager = request.form.get('is_manager') == 'on'
     
     query = """
-        INSERT INTO Employee (EmployeeName, Position, Salary, BranchID, DepartmentID, ManagerID, IsManager)
+        INSERT INTO Employee (EmployeeName, PositionID, Salary, BranchID, DepartmentID, ManagerID, IsManager)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
-    result = execute_query(query, (name, position, salary, branch_id, dept_id, manager_id, is_manager), fetch=False)
+    result = execute_query(query, (name, position_id, salary, branch_id, dept_id, manager_id, is_manager), fetch=False)
     
     if result:
         flash('Employee added successfully!', 'success')
@@ -265,20 +245,33 @@ def add_client():
 
 @app.route('/projects')
 def projects():
-    """List all projects"""
-    query = """
-        SELECT p.*, b.BranchName, c.ClientName
-        FROM Project p
-        JOIN Branch b ON p.BranchID = b.BranchID
-        JOIN Client c ON p.ClientID = c.ClientID
-        ORDER BY p.ProjectID DESC
-    """
-    projects = execute_query(query) or []
+    """List all projects, optionally filtered by type"""
+    project_type = request.args.get('type', None)
+    
+    if project_type in ['building', 'solar']:
+        query = """
+            SELECT p.*, b.BranchName, c.ClientName
+            FROM Project p
+            JOIN Branch b ON p.BranchID = b.BranchID
+            JOIN Client c ON p.ClientID = c.ClientID
+            WHERE p.ProjectType = %s
+            ORDER BY p.ProjectID DESC
+        """
+        projects = execute_query(query, (project_type,)) or []
+    else:
+        query = """
+            SELECT p.*, b.BranchName, c.ClientName
+            FROM Project p
+            JOIN Branch b ON p.BranchID = b.BranchID
+            JOIN Client c ON p.ClientID = c.ClientID
+            ORDER BY p.ProjectID DESC
+        """
+        projects = execute_query(query) or []
     
     branches = execute_query("SELECT BranchID, BranchName FROM Branch ORDER BY BranchName") or []
     clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
     
-    return render_template('projects.html', projects=projects, branches=branches, clients=clients)
+    return render_template('projects.html', projects=projects, branches=branches, clients=clients, project_type=project_type)
 
 @app.route('/projects/<int:project_id>')
 def project_details(project_id):
@@ -298,9 +291,10 @@ def project_details(project_id):
     
     # Get work assignments
     assignments_query = """
-        SELECT wa.*, e.EmployeeName, e.Position
+        SELECT wa.*, e.EmployeeName, r.Title as Position
         FROM WorkAssignment wa
         JOIN Employee e ON wa.EmployeeID = e.EmployeeID
+        JOIN Role r ON e.PositionID = r.RoleID
         WHERE wa.ProjectID = %s
     """
     assignments = execute_query(assignments_query, (project_id,)) or []
@@ -314,28 +308,64 @@ def project_details(project_id):
     """
     materials = execute_query(materials_query, (project_id,)) or []
     
-    return render_template('manage_project.html', project=project[0], assignments=assignments, materials=materials)
+    # Calculate total material cost
+    total_material_cost = 0.0
+    if materials:
+        for m in materials:
+            # Handle both Decimal and float types
+            quantity = float(m.get('Quantity', 0) or 0)
+            unit_price = float(m.get('UnitPrice', 0) or 0)
+            total_material_cost += quantity * unit_price
+    
+    return render_template('manage_project.html', project=project[0], assignments=assignments, materials=materials, total_material_cost=total_material_cost)
 
 @app.route('/projects/add', methods=['POST'])
 def add_project():
     """Add a new project"""
-    name = request.form.get('project_name')
-    location = request.form.get('location')
-    cost = request.form.get('cost') or 0
-    revenue = request.form.get('revenue')
-    branch_id = request.form.get('branch_id')
-    client_id = request.form.get('client_id')
-    
-    query = """
-        INSERT INTO Project (ProjectName, Location, Cost, Revenue, BranchID, ClientID)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """
-    result = execute_query(query, (name, location, cost, revenue, branch_id, client_id), fetch=False)
-    
-    if result:
-        flash('Project added successfully!', 'success')
-    else:
-        flash('Error adding project', 'error')
+    try:
+        name = request.form.get('project_name')
+        location = request.form.get('location')
+        cost = request.form.get('cost') or 0
+        revenue = request.form.get('revenue')
+        project_type = request.form.get('project_type', 'building')
+        branch_id = request.form.get('branch_id')
+        client_id = request.form.get('client_id')
+        
+        # Check if ProjectType column exists, if not use old query
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            try:
+                # Try to check if ProjectType column exists
+                cursor.execute("SHOW COLUMNS FROM Project LIKE 'ProjectType'")
+                has_project_type = cursor.fetchone() is not None
+                
+                if has_project_type:
+                    query = """
+                        INSERT INTO Project (ProjectName, Location, Cost, Revenue, ProjectType, BranchID, ClientID)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(query, (name, location, cost, revenue, project_type, branch_id, client_id))
+                else:
+                    # Fallback for old schema
+                    query = """
+                        INSERT INTO Project (ProjectName, Location, Cost, Revenue, BranchID, ClientID)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(query, (name, location, cost, revenue, branch_id, client_id))
+                
+                connection.commit()
+                flash('Project added successfully!', 'success')
+            except Error as e:
+                connection.rollback()
+                flash(f'Error adding project: {str(e)}', 'error')
+            finally:
+                cursor.close()
+                connection.close()
+        else:
+            flash('Error: Could not connect to database', 'error')
+    except Exception as e:
+        flash(f'Error adding project: {str(e)}', 'error')
     
     return redirect(url_for('projects'))
 
@@ -402,10 +432,11 @@ def add_material():
 def work_assignments():
     """Manage work assignments (employees to projects)"""
     query = """
-        SELECT wa.*, p.ProjectName, e.EmployeeName, e.Position
+        SELECT wa.*, p.ProjectName, e.EmployeeName, r.Title as Position
         FROM WorkAssignment wa
         JOIN Project p ON wa.ProjectID = p.ProjectID
         JOIN Employee e ON wa.EmployeeID = e.EmployeeID
+        JOIN Role r ON e.PositionID = r.RoleID
         ORDER BY wa.StartDate DESC
     """
     assignments = execute_query(query) or []
@@ -527,37 +558,251 @@ def add_supplier_material():
     
     return redirect(url_for('supplier_materials'))
 
-# ==================== MY PROJECTS ====================
+# ==================== CONTRACTS ====================
 
-@app.route('/myProjects')
-def my_projects():
-    """Show projects by employee (can filter by employee ID)"""
-    employee_id = request.args.get('employee_id', type=int)
+@app.route('/contracts')
+def contracts():
+    """List and manage contracts"""
+    query = """
+        SELECT c.*, p.ProjectName, cl.ClientName
+        FROM Contract c
+        JOIN Project p ON c.ProjectID = p.ProjectID
+        JOIN Client cl ON c.ClientID = cl.ClientID
+        ORDER BY c.ContractID DESC
+    """
+    contracts = execute_query(query) or []
     
-    if employee_id:
-        query = """
-            SELECT DISTINCT p.*, b.BranchName, c.ClientName, wa.Role, wa.HoursWorked
-            FROM Project p
-            JOIN Branch b ON p.BranchID = b.BranchID
-            JOIN Client c ON p.ClientID = c.ClientID
-            JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
-            WHERE wa.EmployeeID = %s
-            ORDER BY p.ProjectName
-        """
-        projects = execute_query(query, (employee_id,)) or []
+    projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
+    clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
+    
+    return render_template('contracts.html', contracts=contracts, projects=projects, clients=clients)
+
+@app.route('/contracts/add', methods=['POST'])
+def add_contract():
+    """Add a new contract"""
+    project_id = request.form.get('project_id')
+    client_id = request.form.get('client_id')
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    total_value = request.form.get('total_value')
+    status = request.form.get('status', 'active')
+    
+    query = """
+        INSERT INTO Contract (ProjectID, ClientID, StartDate, EndDate, TotalValue, Status)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    result = execute_query(query, (project_id, client_id, start_date, end_date, total_value, status), fetch=False)
+    
+    if result:
+        flash('Contract added successfully!', 'success')
     else:
-        query = """
-            SELECT DISTINCT p.*, b.BranchName, c.ClientName
-            FROM Project p
-            JOIN Branch b ON p.BranchID = b.BranchID
-            JOIN Client c ON p.ClientID = c.ClientID
-            ORDER BY p.ProjectName
-        """
-        projects = execute_query(query) or []
+        flash('Error adding contract', 'error')
     
-    employees = execute_query("SELECT EmployeeID, EmployeeName FROM Employee ORDER BY EmployeeName") or []
+    return redirect(url_for('contracts'))
+
+# ==================== PHASES ====================
+
+@app.route('/phases')
+def phases():
+    """List and manage project phases"""
+    query = """
+        SELECT ph.*, p.ProjectName
+        FROM Phase ph
+        JOIN Project p ON ph.ProjectID = p.ProjectID
+        ORDER BY ph.PhaseID DESC
+    """
+    phases = execute_query(query) or []
     
-    return render_template('myProjects.html', projects=projects, employees=employees, selected_employee=employee_id)
+    projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
+    
+    return render_template('phases.html', phases=phases, projects=projects)
+
+@app.route('/phases/add', methods=['POST'])
+def add_phase():
+    """Add a new phase"""
+    project_id = request.form.get('project_id')
+    name = request.form.get('name')
+    description = request.form.get('description') or None
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    status = request.form.get('status', 'planned')
+    
+    query = """
+        INSERT INTO Phase (ProjectID, Name, Description, StartDate, EndDate, Status)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    result = execute_query(query, (project_id, name, description, start_date, end_date, status), fetch=False)
+    
+    if result:
+        flash('Phase added successfully!', 'success')
+    else:
+        flash('Error adding phase', 'error')
+    
+    return redirect(url_for('phases'))
+
+# ==================== SCHEDULES ====================
+
+@app.route('/schedules')
+def schedules():
+    """List and manage schedules"""
+    query = """
+        SELECT s.*, p.ProjectName, ph.Name as PhaseName
+        FROM Schedule s
+        JOIN Project p ON s.ProjectID = p.ProjectID
+        JOIN Phase ph ON s.PhaseID = ph.PhaseID
+        ORDER BY s.ScheduleID DESC
+    """
+    schedules = execute_query(query) or []
+    
+    projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
+    phases = execute_query("SELECT PhaseID, Name, ProjectID FROM Phase ORDER BY PhaseID") or []
+    
+    return render_template('schedules.html', schedules=schedules, projects=projects, phases=phases)
+
+@app.route('/schedules/add', methods=['POST'])
+def add_schedule():
+    """Add a new schedule"""
+    project_id = request.form.get('project_id')
+    phase_id = request.form.get('phase_id')
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    task_details = request.form.get('task_details') or None
+    
+    query = """
+        INSERT INTO Schedule (ProjectID, PhaseID, StartDate, EndDate, TaskDetails)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    result = execute_query(query, (project_id, phase_id, start_date, end_date, task_details), fetch=False)
+    
+    if result:
+        flash('Schedule added successfully!', 'success')
+    else:
+        flash('Error adding schedule', 'error')
+    
+    return redirect(url_for('schedules'))
+
+# ==================== SALES ====================
+
+@app.route('/sales')
+def sales():
+    """List and manage sales"""
+    query = """
+        SELECT s.*, p.ProjectName, c.ClientName
+        FROM Sales s
+        JOIN Project p ON s.ProjectID = p.ProjectID
+        JOIN Client c ON s.ClientID = c.ClientID
+        ORDER BY s.SaleID DESC
+    """
+    sales = execute_query(query) or []
+    
+    projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
+    clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
+    
+    return render_template('sales.html', sales=sales, projects=projects, clients=clients)
+
+@app.route('/sales/add', methods=['POST'])
+def add_sale():
+    """Add a new sale"""
+    project_id = request.form.get('project_id')
+    client_id = request.form.get('client_id')
+    amount = request.form.get('amount')
+    issue_date = request.form.get('issue_date')
+    due_date = request.form.get('due_date') or None
+    
+    query = """
+        INSERT INTO Sales (ProjectID, ClientID, Amount, IssueDate, DueDate)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    result = execute_query(query, (project_id, client_id, amount, issue_date, due_date), fetch=False)
+    
+    if result:
+        flash('Sale added successfully!', 'success')
+    else:
+        flash('Error adding sale', 'error')
+    
+    return redirect(url_for('sales'))
+
+# ==================== PURCHASES ====================
+
+@app.route('/purchases')
+def purchases():
+    """List and manage purchases"""
+    query = """
+        SELECT pu.*, s.SupplierName, m.MaterialName
+        FROM Purchase pu
+        JOIN Supplier s ON pu.SupplierID = s.SupplierID
+        JOIN Material m ON pu.MaterialID = m.MaterialID
+        ORDER BY pu.PurchaseID DESC
+    """
+    purchases = execute_query(query) or []
+    
+    suppliers = execute_query("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName") or []
+    materials = execute_query("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName") or []
+    
+    return render_template('purchases.html', purchases=purchases, suppliers=suppliers, materials=materials)
+
+@app.route('/purchases/add', methods=['POST'])
+def add_purchase():
+    """Add a new purchase"""
+    supplier_id = request.form.get('supplier_id')
+    material_id = request.form.get('material_id')
+    quantity = request.form.get('quantity')
+    purchase_date = request.form.get('purchase_date')
+    total_cost = request.form.get('total_cost')
+    
+    query = """
+        INSERT INTO Purchase (SupplierID, MaterialID, Quantity, PurchaseDate, TotalCost)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    result = execute_query(query, (supplier_id, material_id, quantity, purchase_date, total_cost), fetch=False)
+    
+    if result:
+        flash('Purchase added successfully!', 'success')
+    else:
+        flash('Error adding purchase', 'error')
+    
+    return redirect(url_for('purchases'))
+
+# ==================== PAYMENTS ====================
+
+@app.route('/payments')
+def payments():
+    """List and manage payments"""
+    query = """
+        SELECT py.*, c.ClientName, s.SupplierName
+        FROM Payment py
+        LEFT JOIN Client c ON py.FromClient = c.ClientID
+        LEFT JOIN Supplier s ON py.ToSupplier = s.SupplierID
+        ORDER BY py.PaymentID DESC
+    """
+    payments = execute_query(query) or []
+    
+    clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
+    suppliers = execute_query("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName") or []
+    
+    return render_template('payments.html', payments=payments, clients=clients, suppliers=suppliers)
+
+@app.route('/payments/add', methods=['POST'])
+def add_payment():
+    """Add a new payment"""
+    from_client = request.form.get('from_client') or None
+    to_supplier = request.form.get('to_supplier') or None
+    amount = request.form.get('amount')
+    payment_date = request.form.get('payment_date')
+    payment_method = request.form.get('payment_method')
+    
+    query = """
+        INSERT INTO Payment (FromClient, ToSupplier, Amount, PaymentDate, PaymentMethod)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    result = execute_query(query, (from_client, to_supplier, amount, payment_date, payment_method), fetch=False)
+    
+    if result:
+        flash('Payment added successfully!', 'success')
+    else:
+        flash('Error adding payment', 'error')
+    
+    return redirect(url_for('payments'))
 
 # ==================== QUERIES / REPORTS ====================
 
@@ -608,464 +853,144 @@ def all_queries():
 def query_profitability():
     """Q1: Project Profitability Analysis"""
     query = """
-        WITH MaterialCosts AS (
-            SELECT 
-                ProjectID,
-                SUM(Quantity * UnitPrice) as MaterialCost
-            FROM ProjectMaterial
-            GROUP BY ProjectID
-        ),
-        LaborCosts AS (
-            SELECT 
-                ProjectID,
-                SUM(HoursWorked * (e.Salary / 160)) as LaborCost
-            FROM WorkAssignment wa
-            JOIN Employee e ON wa.EmployeeID = e.EmployeeID
-            GROUP BY ProjectID
-        )
         SELECT 
             p.ProjectID,
             p.ProjectName,
             b.BranchName,
             c.ClientName,
             p.Revenue,
-            COALESCE(mc.MaterialCost, 0) as MaterialCost,
-            COALESCE(lc.LaborCost, 0) as LaborCost,
-            (p.Revenue - COALESCE(mc.MaterialCost, 0) - COALESCE(lc.LaborCost, 0)) as Profit,
-            CASE 
-                WHEN p.Revenue > 0 THEN
-                    ROUND(((p.Revenue - COALESCE(mc.MaterialCost, 0) - COALESCE(lc.LaborCost, 0)) / p.Revenue) * 100, 2)
-                ELSE 0
-            END as ProfitMargin
+            SUM(pm.Quantity * pm.UnitPrice) as MaterialCost,
+            SUM(wa.HoursWorked * (e.Salary / 160)) as LaborCost,
+            (p.Revenue - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160))) as Profit
         FROM Project p
         JOIN Branch b ON p.BranchID = b.BranchID
         JOIN Client c ON p.ClientID = c.ClientID
-        LEFT JOIN MaterialCosts mc ON p.ProjectID = mc.ProjectID
-        LEFT JOIN LaborCosts lc ON p.ProjectID = lc.ProjectID
+        LEFT JOIN ProjectMaterial pm ON p.ProjectID = pm.ProjectID
+        LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
+        LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
+        GROUP BY p.ProjectID, p.ProjectName, b.BranchName, c.ClientName, p.Revenue
         ORDER BY Profit DESC
     """
     
-    sql_statement = """
-WITH MaterialCosts AS (
-    SELECT ProjectID, SUM(Quantity * UnitPrice) as MaterialCost
-    FROM ProjectMaterial GROUP BY ProjectID
-),
-LaborCosts AS (
-    SELECT ProjectID, SUM(HoursWorked * (e.Salary / 160)) as LaborCost
-    FROM WorkAssignment wa
-    JOIN Employee e ON wa.EmployeeID = e.EmployeeID
-    GROUP BY ProjectID
-)
-SELECT 
-    p.ProjectID, p.ProjectName, b.BranchName, c.ClientName,
-    p.Revenue,
-    COALESCE(mc.MaterialCost, 0) as MaterialCost,
-    COALESCE(lc.LaborCost, 0) as LaborCost,
-    (p.Revenue - COALESCE(mc.MaterialCost, 0) - COALESCE(lc.LaborCost, 0)) as Profit,
-    CASE 
-        WHEN p.Revenue > 0 THEN
-            ROUND(((p.Revenue - COALESCE(mc.MaterialCost, 0) - COALESCE(lc.LaborCost, 0)) / p.Revenue) * 100, 2)
-        ELSE 0
-    END as ProfitMargin
-FROM Project p
-JOIN Branch b ON p.BranchID = b.BranchID
-JOIN Client c ON p.ClientID = c.ClientID
-LEFT JOIN MaterialCosts mc ON p.ProjectID = mc.ProjectID
-LEFT JOIN LaborCosts lc ON p.ProjectID = lc.ProjectID
-ORDER BY Profit DESC
-    """
-    
     results = execute_query(query) or []
-    return render_template('query_profitability.html', results=results, sql_statement=sql_statement,
-                         description='This query calculates project profitability by computing material costs, labor costs (based on employee salaries), and profit margins.')
+    return render_template('query_profitability.html', results=results,
+                         description='This query calculates project profitability by computing material costs, labor costs (based on employee salaries), and profit.')
 
 @app.route('/query/supplier_impact')
 def query_supplier_impact():
     """Q2: Supplier Impact Analysis"""
     query = """
-        WITH SupplierProjectValue AS (
-            SELECT 
-                s.SupplierID,
-                s.SupplierName,
-                COUNT(DISTINCT pm.ProjectID) as ProjectCount,
-                SUM(pm.Quantity * sm.Price) as TotalPotentialValue
-            FROM Supplier s
-            JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-            JOIN ProjectMaterial pm ON sm.MaterialID = pm.MaterialID
-            GROUP BY s.SupplierID, s.SupplierName
-        )
         SELECT 
-            SupplierID,
-            SupplierName,
-            ProjectCount,
-            TotalPotentialValue,
-            DENSE_RANK() OVER (ORDER BY ProjectCount DESC, TotalPotentialValue DESC) as RankByProjects,
-            DENSE_RANK() OVER (ORDER BY TotalPotentialValue DESC, ProjectCount DESC) as RankByValue
-        FROM SupplierProjectValue
+            s.SupplierID,
+            s.SupplierName,
+            COUNT(DISTINCT pm.ProjectID) as ProjectCount,
+            SUM(pm.Quantity * sm.Price) as TotalPotentialValue
+        FROM Supplier s
+        JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
+        JOIN ProjectMaterial pm ON sm.MaterialID = pm.MaterialID
+        GROUP BY s.SupplierID, s.SupplierName
         ORDER BY ProjectCount DESC, TotalPotentialValue DESC
     """
     
-    sql_statement = """
-WITH SupplierProjectValue AS (
-    SELECT 
-        s.SupplierID, s.SupplierName,
-        COUNT(DISTINCT pm.ProjectID) as ProjectCount,
-        SUM(pm.Quantity * sm.Price) as TotalPotentialValue
-    FROM Supplier s
-    JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-    JOIN ProjectMaterial pm ON sm.MaterialID = pm.MaterialID
-    GROUP BY s.SupplierID, s.SupplierName
-)
-SELECT 
-    SupplierID, SupplierName, ProjectCount, TotalPotentialValue,
-    DENSE_RANK() OVER (ORDER BY ProjectCount DESC, TotalPotentialValue DESC) as RankByProjects,
-    DENSE_RANK() OVER (ORDER BY TotalPotentialValue DESC, ProjectCount DESC) as RankByValue
-FROM SupplierProjectValue
-ORDER BY ProjectCount DESC, TotalPotentialValue DESC
-    """
-    
     results = execute_query(query) or []
-    return render_template('query_supplier_impact.html', results=results, sql_statement=sql_statement,
-                         description='This query analyzes supplier impact by counting distinct projects supplied (via materials) and calculating total potential value, with rankings by project count and value.')
+    return render_template('query_supplier_impact.html', results=results,
+                         description='This query analyzes supplier impact by counting distinct projects supplied (via materials) and calculating total potential value.')
 
 @app.route('/query/cost_driver_materials')
 def query_cost_driver_materials():
     """Q3: Cost Driver Materials Analysis"""
     query = """
-        WITH MaterialSpend AS (
-            SELECT 
-                m.MaterialID,
-                m.MaterialName,
-                SUM(pm.Quantity * pm.UnitPrice) as TotalSpend,
-                COUNT(DISTINCT pm.ProjectID) as ProjectCount
-            FROM Material m
-            JOIN ProjectMaterial pm ON m.MaterialID = pm.MaterialID
-            GROUP BY m.MaterialID, m.MaterialName
-        ),
-        TotalSpend AS (
-            SELECT SUM(TotalSpend) as GrandTotal FROM MaterialSpend
-        ),
-        MaterialRanked AS (
-            SELECT 
-                ms.*,
-                ROUND((ms.TotalSpend / ts.GrandTotal) * 100, 2) as SpendPercentage,
-                ROW_NUMBER() OVER (ORDER BY ms.TotalSpend DESC) as MaterialRank
-            FROM MaterialSpend ms, TotalSpend ts
-        ),
-        TopProjectsPerMaterial AS (
-            SELECT 
-                pm.MaterialID,
-                pm.ProjectID,
-                p.ProjectName,
-                (pm.Quantity * pm.UnitPrice) as ProjectMaterialCost,
-                ROW_NUMBER() OVER (PARTITION BY pm.MaterialID ORDER BY (pm.Quantity * pm.UnitPrice) DESC) as ProjectRank
-            FROM ProjectMaterial pm
-            JOIN Project p ON pm.ProjectID = p.ProjectID
-        )
         SELECT 
-            mr.MaterialID,
-            mr.MaterialName,
-            mr.TotalSpend,
-            mr.SpendPercentage,
-            mr.MaterialRank,
-            mr.ProjectCount,
-            tp.ProjectID as TopProjectID,
-            tp.ProjectName as TopProjectName,
-            tp.ProjectMaterialCost as TopProjectCost,
-            tp.ProjectRank
-        FROM MaterialRanked mr
-        LEFT JOIN TopProjectsPerMaterial tp ON mr.MaterialID = tp.MaterialID AND tp.ProjectRank <= 3
-        ORDER BY mr.MaterialRank, tp.ProjectRank
-    """
-    
-    sql_statement = """
-WITH MaterialSpend AS (
-    SELECT 
-        m.MaterialID, m.MaterialName,
-        SUM(pm.Quantity * pm.UnitPrice) as TotalSpend,
-        COUNT(DISTINCT pm.ProjectID) as ProjectCount
-    FROM Material m
-    JOIN ProjectMaterial pm ON m.MaterialID = pm.MaterialID
-    GROUP BY m.MaterialID, m.MaterialName
-),
-TotalSpend AS (SELECT SUM(TotalSpend) as GrandTotal FROM MaterialSpend),
-MaterialRanked AS (
-    SELECT 
-        ms.*,
-        ROUND((ms.TotalSpend / ts.GrandTotal) * 100, 2) as SpendPercentage,
-        ROW_NUMBER() OVER (ORDER BY ms.TotalSpend DESC) as MaterialRank
-    FROM MaterialSpend ms, TotalSpend ts
-),
-TopProjectsPerMaterial AS (
-    SELECT 
-        pm.MaterialID, pm.ProjectID, p.ProjectName,
-        (pm.Quantity * pm.UnitPrice) as ProjectMaterialCost,
-        ROW_NUMBER() OVER (PARTITION BY pm.MaterialID ORDER BY (pm.Quantity * pm.UnitPrice) DESC) as ProjectRank
-    FROM ProjectMaterial pm
-    JOIN Project p ON pm.ProjectID = p.ProjectID
-)
-SELECT 
-    mr.MaterialID, mr.MaterialName, mr.TotalSpend, mr.SpendPercentage,
-    mr.MaterialRank, mr.ProjectCount,
-    tp.ProjectID as TopProjectID, tp.ProjectName as TopProjectName,
-    tp.ProjectMaterialCost as TopProjectCost, tp.ProjectRank
-FROM MaterialRanked mr
-LEFT JOIN TopProjectsPerMaterial tp ON mr.MaterialID = tp.MaterialID AND tp.ProjectRank <= 3
-ORDER BY mr.MaterialRank, tp.ProjectRank
+            m.MaterialID,
+            m.MaterialName,
+            SUM(pm.Quantity * pm.UnitPrice) as TotalSpend,
+            COUNT(DISTINCT pm.ProjectID) as ProjectCount
+        FROM Material m
+        JOIN ProjectMaterial pm ON m.MaterialID = pm.MaterialID
+        GROUP BY m.MaterialID, m.MaterialName
+        ORDER BY TotalSpend DESC
     """
     
     results = execute_query(query) or []
-    return render_template('query_cost_driver_materials.html', results=results, sql_statement=sql_statement,
-                         description='This query identifies cost-driving materials by ranking them by total spend, calculates percentage share of overall spend, and shows the top 3 projects for each material using window functions.')
+    return render_template('query_cost_driver_materials.html', results=results,
+                         description='This query identifies cost-driving materials by total spend and shows how many projects use each material.')
 
 @app.route('/query/employee_utilization')
 def query_employee_utilization():
     """Q4: Employee Utilization by Manager"""
     query = """
-        WITH ManagerSubordinates AS (
-            SELECT 
-                m.EmployeeID as ManagerID,
-                m.EmployeeName as ManagerName,
-                COUNT(DISTINCT e.EmployeeID) as SubordinateCount
-            FROM Employee m
-            LEFT JOIN Employee e ON e.ManagerID = m.EmployeeID
-            WHERE m.IsManager = TRUE
-            GROUP BY m.EmployeeID, m.EmployeeName
-        ),
-        TeamHours AS (
-            SELECT 
-                e.ManagerID,
-                SUM(wa.HoursWorked) as TotalTeamHours
-            FROM Employee e
-            JOIN WorkAssignment wa ON e.EmployeeID = wa.EmployeeID
-            WHERE e.ManagerID IS NOT NULL
-            GROUP BY e.ManagerID
-        ),
-        TopProjectByManager AS (
-            SELECT 
-                e.ManagerID,
-                wa.ProjectID,
-                p.ProjectName,
-                SUM(wa.HoursWorked) as TeamProjectHours,
-                ROW_NUMBER() OVER (PARTITION BY e.ManagerID ORDER BY SUM(wa.HoursWorked) DESC) as ProjectRank
-            FROM Employee e
-            JOIN WorkAssignment wa ON e.EmployeeID = wa.EmployeeID
-            JOIN Project p ON wa.ProjectID = p.ProjectID
-            WHERE e.ManagerID IS NOT NULL
-            GROUP BY e.ManagerID, wa.ProjectID, p.ProjectName
-        )
         SELECT 
-            ms.ManagerID,
-            ms.ManagerName,
-            ms.SubordinateCount,
-            COALESCE(th.TotalTeamHours, 0) as TotalTeamHours,
-            tp.ProjectID as TopProjectID,
-            tp.ProjectName as TopProjectName,
-            tp.TeamProjectHours as TopProjectHours
-        FROM ManagerSubordinates ms
-        LEFT JOIN TeamHours th ON ms.ManagerID = th.ManagerID
-        LEFT JOIN TopProjectByManager tp ON ms.ManagerID = tp.ManagerID AND tp.ProjectRank = 1
+            m.EmployeeID as ManagerID,
+            m.EmployeeName as ManagerName,
+            COUNT(DISTINCT e.EmployeeID) as SubordinateCount,
+            SUM(wa.HoursWorked) as TotalTeamHours
+        FROM Employee m
+        LEFT JOIN Employee e ON e.ManagerID = m.EmployeeID
+        LEFT JOIN WorkAssignment wa ON e.EmployeeID = wa.EmployeeID
+        WHERE m.IsManager = TRUE
+        GROUP BY m.EmployeeID, m.EmployeeName
         ORDER BY TotalTeamHours DESC
     """
     
-    sql_statement = """
-WITH ManagerSubordinates AS (
-    SELECT 
-        m.EmployeeID as ManagerID, m.EmployeeName as ManagerName,
-        COUNT(DISTINCT e.EmployeeID) as SubordinateCount
-    FROM Employee m
-    LEFT JOIN Employee e ON e.ManagerID = m.EmployeeID
-    WHERE m.IsManager = TRUE
-    GROUP BY m.EmployeeID, m.EmployeeName
-),
-TeamHours AS (
-    SELECT e.ManagerID, SUM(wa.HoursWorked) as TotalTeamHours
-    FROM Employee e
-    JOIN WorkAssignment wa ON e.EmployeeID = wa.EmployeeID
-    WHERE e.ManagerID IS NOT NULL
-    GROUP BY e.ManagerID
-),
-TopProjectByManager AS (
-    SELECT 
-        e.ManagerID, wa.ProjectID, p.ProjectName,
-        SUM(wa.HoursWorked) as TeamProjectHours,
-        ROW_NUMBER() OVER (PARTITION BY e.ManagerID ORDER BY SUM(wa.HoursWorked) DESC) as ProjectRank
-    FROM Employee e
-    JOIN WorkAssignment wa ON e.EmployeeID = wa.EmployeeID
-    JOIN Project p ON wa.ProjectID = p.ProjectID
-    WHERE e.ManagerID IS NOT NULL
-    GROUP BY e.ManagerID, wa.ProjectID, p.ProjectName
-)
-SELECT 
-    ms.ManagerID, ms.ManagerName, ms.SubordinateCount,
-    COALESCE(th.TotalTeamHours, 0) as TotalTeamHours,
-    tp.ProjectID as TopProjectID, tp.ProjectName as TopProjectName,
-    tp.TeamProjectHours as TopProjectHours
-FROM ManagerSubordinates ms
-LEFT JOIN TeamHours th ON ms.ManagerID = th.ManagerID
-LEFT JOIN TopProjectByManager tp ON ms.ManagerID = tp.ManagerID AND tp.ProjectRank = 1
-ORDER BY TotalTeamHours DESC
-    """
-    
     results = execute_query(query) or []
-    return render_template('query_employee_utilization.html', results=results, sql_statement=sql_statement,
-                         description='This query analyzes employee utilization by manager, showing the number of subordinates, total team hours worked, and the top project by team hours for each manager.')
+    return render_template('query_employee_utilization.html', results=results,
+                         description='This query analyzes employee utilization by manager, showing the number of subordinates and total team hours worked.')
 
 @app.route('/query/price_anomalies')
 def query_price_anomalies():
     """Q5: Price Anomalies Detection"""
     query = """
-        WITH SupplierMinPrices AS (
-            SELECT 
-                MaterialID,
-                MIN(Price) as MinSupplierPrice
-            FROM SupplierMaterial
-            GROUP BY MaterialID
-        ),
-        Anomalies AS (
-            SELECT 
-                pm.ProjectID,
-                p.ProjectName,
-                pm.MaterialID,
-                m.MaterialName,
-                pm.UnitPrice as ProjectPrice,
-                smp.MinSupplierPrice,
-                ROUND(((pm.UnitPrice - smp.MinSupplierPrice) / smp.MinSupplierPrice) * 100, 2) as PercentDifference,
-                (SELECT SupplierID FROM SupplierMaterial 
-                 WHERE MaterialID = pm.MaterialID AND Price = smp.MinSupplierPrice LIMIT 1) as SuggestedSupplierID,
-                (SELECT SupplierName FROM Supplier s
-                 JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-                 WHERE sm.MaterialID = pm.MaterialID AND sm.Price = smp.MinSupplierPrice LIMIT 1) as SuggestedSupplier
-            FROM ProjectMaterial pm
-            JOIN Material m ON pm.MaterialID = m.MaterialID
-            JOIN SupplierMinPrices smp ON pm.MaterialID = smp.MaterialID
-            WHERE pm.UnitPrice > (smp.MinSupplierPrice * 1.20)
-        )
-        SELECT * FROM Anomalies
+        SELECT 
+            pm.ProjectID,
+            p.ProjectName,
+            pm.MaterialID,
+            m.MaterialName,
+            pm.UnitPrice as ProjectPrice,
+            MIN(sm.Price) as MinSupplierPrice,
+            ROUND(((pm.UnitPrice - MIN(sm.Price)) / MIN(sm.Price)) * 100, 2) as PercentDifference
+        FROM ProjectMaterial pm
+        JOIN Material m ON pm.MaterialID = m.MaterialID
+        JOIN SupplierMaterial sm ON pm.MaterialID = sm.MaterialID
+        JOIN Project p ON pm.ProjectID = p.ProjectID
+        GROUP BY pm.ProjectID, p.ProjectName, pm.MaterialID, m.MaterialName, pm.UnitPrice
+        HAVING pm.UnitPrice > (MIN(sm.Price) * 1.20)
         ORDER BY PercentDifference DESC
     """
     
-    sql_statement = """
-WITH SupplierMinPrices AS (
-    SELECT MaterialID, MIN(Price) as MinSupplierPrice
-    FROM SupplierMaterial GROUP BY MaterialID
-),
-Anomalies AS (
-    SELECT 
-        pm.ProjectID, p.ProjectName, pm.MaterialID, m.MaterialName,
-        pm.UnitPrice as ProjectPrice, smp.MinSupplierPrice,
-        ROUND(((pm.UnitPrice - smp.MinSupplierPrice) / smp.MinSupplierPrice) * 100, 2) as PercentDifference,
-        (SELECT SupplierID FROM SupplierMaterial 
-         WHERE MaterialID = pm.MaterialID AND Price = smp.MinSupplierPrice LIMIT 1) as SuggestedSupplierID,
-        (SELECT SupplierName FROM Supplier s
-         JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-         WHERE sm.MaterialID = pm.MaterialID AND sm.Price = smp.MinSupplierPrice LIMIT 1) as SuggestedSupplier
-    FROM ProjectMaterial pm
-    JOIN Material m ON pm.MaterialID = m.MaterialID
-    JOIN SupplierMinPrices smp ON pm.MaterialID = smp.MaterialID
-    WHERE pm.UnitPrice > (smp.MinSupplierPrice * 1.20)
-)
-SELECT * FROM Anomalies ORDER BY PercentDifference DESC
-    """
-    
     results = execute_query(query) or []
-    return render_template('query_price_anomalies.html', results=results, sql_statement=sql_statement,
-                         description='This query identifies price anomalies where project material prices exceed the minimum supplier price by more than 20%, suggesting potential cost savings opportunities.')
+    return render_template('query_price_anomalies.html', results=results,
+                         description='This query identifies price anomalies where project material prices exceed the minimum supplier price by more than 20%.')
 
 @app.route('/query/branch_performance')
 def query_branch_performance():
     """Q6: Branch Performance Comparison"""
     query = """
-        WITH BranchProjects AS (
-            SELECT 
-                b.BranchID,
-                b.BranchName,
-                b.City,
-                COUNT(DISTINCT p.ProjectID) as ProjectCount,
-                SUM(p.Revenue) as TotalRevenue,
-                AVG(p.Revenue) as AvgRevenuePerProject
-            FROM Branch b
-            LEFT JOIN Project p ON b.BranchID = p.BranchID
-            GROUP BY b.BranchID, b.BranchName, b.City
-        ),
-        BranchCosts AS (
-            SELECT 
-                b.BranchID,
-                COALESCE(SUM(pm.Quantity * pm.UnitPrice), 0) as TotalMaterialCost,
-                COALESCE(SUM(wa.HoursWorked * (e.Salary / 160)), 0) as TotalLaborCost
-            FROM Branch b
-            LEFT JOIN Project p ON b.BranchID = p.BranchID
-            LEFT JOIN ProjectMaterial pm ON p.ProjectID = pm.ProjectID
-            LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
-            LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
-            GROUP BY b.BranchID
-        )
         SELECT 
-            bp.BranchID,
-            bp.BranchName,
-            bp.City,
-            bp.ProjectCount,
-            bp.TotalRevenue,
-            bp.AvgRevenuePerProject,
-            bc.TotalMaterialCost,
-            bc.TotalLaborCost,
-            (bp.TotalRevenue - bc.TotalMaterialCost - bc.TotalLaborCost) as TotalProfit,
-            CASE 
-                WHEN bp.TotalRevenue > 0 THEN
-                    ROUND(((bp.TotalRevenue - bc.TotalMaterialCost - bc.TotalLaborCost) / bp.TotalRevenue) * 100, 2)
-                ELSE 0
-            END as ProfitMargin,
-            RANK() OVER (ORDER BY (bp.TotalRevenue - bc.TotalMaterialCost - bc.TotalLaborCost) DESC) as ProfitRank,
-            RANK() OVER (ORDER BY bp.ProjectCount DESC) as ProjectCountRank
-        FROM BranchProjects bp
-        JOIN BranchCosts bc ON bp.BranchID = bc.BranchID
+            b.BranchID,
+            b.BranchName,
+            b.City,
+            COUNT(DISTINCT p.ProjectID) as ProjectCount,
+            SUM(p.Revenue) as TotalRevenue,
+            AVG(p.Revenue) as AvgRevenuePerProject,
+            SUM(pm.Quantity * pm.UnitPrice) as TotalMaterialCost,
+            SUM(wa.HoursWorked * (e.Salary / 160)) as TotalLaborCost,
+            (SUM(p.Revenue) - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160))) as TotalProfit
+        FROM Branch b
+        LEFT JOIN Project p ON b.BranchID = p.BranchID
+        LEFT JOIN ProjectMaterial pm ON p.ProjectID = pm.ProjectID
+        LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
+        LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
+        GROUP BY b.BranchID, b.BranchName, b.City
         ORDER BY TotalProfit DESC
     """
     
-    sql_statement = """
-WITH BranchProjects AS (
-    SELECT 
-        b.BranchID, b.BranchName, b.City,
-        COUNT(DISTINCT p.ProjectID) as ProjectCount,
-        SUM(p.Revenue) as TotalRevenue,
-        AVG(p.Revenue) as AvgRevenuePerProject
-    FROM Branch b
-    LEFT JOIN Project p ON b.BranchID = p.BranchID
-    GROUP BY b.BranchID, b.BranchName, b.City
-),
-BranchCosts AS (
-    SELECT 
-        b.BranchID,
-        COALESCE(SUM(pm.Quantity * pm.UnitPrice), 0) as TotalMaterialCost,
-        COALESCE(SUM(wa.HoursWorked * (e.Salary / 160)), 0) as TotalLaborCost
-    FROM Branch b
-    LEFT JOIN Project p ON b.BranchID = p.BranchID
-    LEFT JOIN ProjectMaterial pm ON p.ProjectID = pm.ProjectID
-    LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
-    LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
-    GROUP BY b.BranchID
-)
-SELECT 
-    bp.BranchID, bp.BranchName, bp.City, bp.ProjectCount,
-    bp.TotalRevenue, bp.AvgRevenuePerProject,
-    bc.TotalMaterialCost, bc.TotalLaborCost,
-    (bp.TotalRevenue - bc.TotalMaterialCost - bc.TotalLaborCost) as TotalProfit,
-    CASE 
-        WHEN bp.TotalRevenue > 0 THEN
-            ROUND(((bp.TotalRevenue - bc.TotalMaterialCost - bc.TotalLaborCost) / bp.TotalRevenue) * 100, 2)
-        ELSE 0
-    END as ProfitMargin,
-    RANK() OVER (ORDER BY (bp.TotalRevenue - bc.TotalMaterialCost - bc.TotalLaborCost) DESC) as ProfitRank,
-    RANK() OVER (ORDER BY bp.ProjectCount DESC) as ProjectCountRank
-FROM BranchProjects bp
-JOIN BranchCosts bc ON bp.BranchID = bc.BranchID
-ORDER BY TotalProfit DESC
-    """
-    
     results = execute_query(query) or []
-    return render_template('query_branch_performance.html', results=results, sql_statement=sql_statement,
-                         description='This query compares branch performance by analyzing total revenue, project counts, material costs, labor costs, profitability, and profit margins, with rankings.')
+    return render_template('query_branch_performance.html', results=results,
+                         description='This query compares branch performance by analyzing total revenue, project counts, material costs, labor costs, and profitability.')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Enable template auto-reload in debug mode
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=True)
 

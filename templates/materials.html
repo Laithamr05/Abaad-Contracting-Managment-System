@@ -43,7 +43,7 @@
                         {% for material in materials %}
                         <tr>
                             <td><strong>{{ material.MaterialName }}</strong></td>
-                            <td>SAR {{ "{:,.2f}".format(material.BaseUnitPrice|float) }}</td>
+                            <td>ILS {{ "{:,.2f}".format(material.BaseUnitPrice|float) }}</td>
                             <td>{{ material.UnitOfMeasure }}</td>
                         </tr>
                         {% endfor %}
@@ -68,7 +68,7 @@
                             <input type="text" class="form-control" id="material_name" name="material_name" required>
                         </div>
                         <div class="mb-3">
-                            <label for="base_unit_price" class="form-label">Base Unit Price (SAR)</label>
+                            <label for="base_unit_price" class="form-label">Base Unit Price (ILS)</label>
                             <input type="number" step="0.01" class="form-control" id="base_unit_price" name="base_unit_price" required>
                         </div>
                         <div class="mb-3">

@@ -25,15 +25,6 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>SQL Statement</h5>
-            </div>
-            <div class="card-body">
-                <pre><code>{{ sql_statement }}</code></pre>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header">
                 <h5>Results</h5>
@@ -50,7 +41,6 @@
                                 <th>Project Price</th>
                                 <th>Min Supplier Price</th>
                                 <th>Percent Difference</th>
-                                <th>Suggested Supplier</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -60,12 +50,11 @@
                                 <td><strong>{{ row.ProjectName }}</strong></td>
                                 <td>{{ row.MaterialID }}</td>
                                 <td>{{ row.MaterialName }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.ProjectPrice|float) }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.MinSupplierPrice|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.ProjectPrice|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.MinSupplierPrice|float) }}</td>
                                 <td>
                                     <span class="badge bg-danger">{{ "{:.2f}".format(row.PercentDifference|float) }}%</span>
                                 </td>
-                                <td>{{ row.SuggestedSupplier or '-' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

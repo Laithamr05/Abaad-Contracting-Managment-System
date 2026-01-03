@@ -25,15 +25,6 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>SQL Statement</h5>
-            </div>
-            <div class="card-body">
-                <pre><code>{{ sql_statement }}</code></pre>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header">
                 <h5>Results</h5>
@@ -47,8 +38,6 @@
                                 <th>Supplier Name</th>
                                 <th>Project Count</th>
                                 <th>Total Potential Value</th>
-                                <th>Rank by Projects</th>
-                                <th>Rank by Value</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -57,9 +46,7 @@
                                 <td>{{ row.SupplierID }}</td>
                                 <td><strong>{{ row.SupplierName }}</strong></td>
                                 <td>{{ row.ProjectCount }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.TotalPotentialValue|float) }}</td>
-                                <td><span class="badge bg-primary">#{{ row.RankByProjects }}</span></td>
-                                <td><span class="badge bg-info">#{{ row.RankByValue }}</span></td>
+                                <td>ILS {{ "{:,.2f}".format(row.TotalPotentialValue|float) }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -25,15 +25,6 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>SQL Statement</h5>
-            </div>
-            <div class="card-body">
-                <pre><code>{{ sql_statement }}</code></pre>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header">
                 <h5>Results</h5>
@@ -46,13 +37,7 @@
                                 <th>Material ID</th>
                                 <th>Material Name</th>
                                 <th>Total Spend</th>
-                                <th>Spend %</th>
-                                <th>Rank</th>
                                 <th>Project Count</th>
-                                <th>Top Project ID</th>
-                                <th>Top Project Name</th>
-                                <th>Top Project Cost</th>
-                                <th>Project Rank</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -60,14 +45,8 @@
                             <tr>
                                 <td>{{ row.MaterialID }}</td>
                                 <td><strong>{{ row.MaterialName }}</strong></td>
-                                <td>SAR {{ "{:,.2f}".format(row.TotalSpend|float) }}</td>
-                                <td>{{ "{:.2f}".format(row.SpendPercentage|float) }}%</td>
-                                <td><span class="badge bg-primary">#{{ row.MaterialRank }}</span></td>
+                                <td>ILS {{ "{:,.2f}".format(row.TotalSpend|float) }}</td>
                                 <td>{{ row.ProjectCount }}</td>
-                                <td>{{ row.TopProjectID or '-' }}</td>
-                                <td>{{ row.TopProjectName or '-' }}</td>
-                                <td>{% if row.TopProjectCost %}SAR {{ "{:,.2f}".format(row.TopProjectCost|float) }}{% else %}-{% endif %}</td>
-                                <td>{% if row.ProjectRank %}#{{ row.ProjectRank }}{% else %}-{% endif %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

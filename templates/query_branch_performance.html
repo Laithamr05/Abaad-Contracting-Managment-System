@@ -25,15 +25,6 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>SQL Statement</h5>
-            </div>
-            <div class="card-body">
-                <pre><code>{{ sql_statement }}</code></pre>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header">
                 <h5>Results</h5>
@@ -52,9 +43,6 @@
                                 <th>Total Material Cost</th>
                                 <th>Total Labor Cost</th>
                                 <th>Total Profit</th>
-                                <th>Profit Margin (%)</th>
-                                <th>Profit Rank</th>
-                                <th>Project Count Rank</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -64,22 +52,11 @@
                                 <td><strong>{{ row.BranchName }}</strong></td>
                                 <td>{{ row.City }}</td>
                                 <td>{{ row.ProjectCount }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.TotalRevenue|float) }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.AvgRevenuePerProject|float) }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.TotalMaterialCost|float) }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.TotalLaborCost|float) }}</td>
-                                <td><strong>SAR {{ "{:,.2f}".format(row.TotalProfit|float) }}</strong></td>
-                                <td>
-                                    {% if row.ProfitMargin|float >= 20 %}
-                                        <span class="badge bg-success">{{ "{:.2f}".format(row.ProfitMargin|float) }}%</span>
-                                    {% elif row.ProfitMargin|float >= 10 %}
-                                        <span class="badge bg-warning">{{ "{:.2f}".format(row.ProfitMargin|float) }}%</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">{{ "{:.2f}".format(row.ProfitMargin|float) }}%</span>
-                                    {% endif %}
-                                </td>
-                                <td><span class="badge bg-primary">#{{ row.ProfitRank }}</span></td>
-                                <td><span class="badge bg-info">#{{ row.ProjectCountRank }}</span></td>
+                                <td>ILS {{ "{:,.2f}".format(row.TotalRevenue|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.AvgRevenuePerProject|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.TotalMaterialCost|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.TotalLaborCost|float) }}</td>
+                                <td><strong>ILS {{ "{:,.2f}".format(row.TotalProfit|float) }}</strong></td>
                             </tr>
                             {% endfor %}
                         </tbody>

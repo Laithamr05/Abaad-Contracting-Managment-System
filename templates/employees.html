@@ -48,7 +48,7 @@
                         <tr>
                             <td><strong>{{ emp.EmployeeName }}</strong></td>
                             <td>{{ emp.Position }}</td>
-                            <td>SAR {{ "{:,}".format(emp.Salary|int) }}</td>
+                            <td>ILS {{ "{:,}".format(emp.Salary|int) }}</td>
                             <td>{{ emp.BranchName }}</td>
                             <td>{{ emp.DepartmentName }}</td>
                             <td>{{ emp.ManagerName or '-' }}</td>
@@ -83,13 +83,18 @@
                                 <input type="text" class="form-control" id="employee_name" name="employee_name" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="position" class="form-label">Position</label>
-                                <input type="text" class="form-control" id="position" name="position" required>
+                                <label for="position_id" class="form-label">Position</label>
+                                <select class="form-select" id="position_id" name="position_id" required>
+                                    <option value="">Select Position</option>
+                                    {% for role in roles %}
+                                    <option value="{{ role.RoleID }}">{{ role.Title }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="salary" class="form-label">Salary (SAR)</label>
+                                <label for="salary" class="form-label">Salary (ILS)</label>
                                 <input type="number" step="0.01" class="form-control" id="salary" name="salary" required>
                             </div>
                             <div class="col-md-6 mb-3">

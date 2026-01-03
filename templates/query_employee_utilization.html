@@ -25,15 +25,6 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>SQL Statement</h5>
-            </div>
-            <div class="card-body">
-                <pre><code>{{ sql_statement }}</code></pre>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header">
                 <h5>Results</h5>
@@ -47,9 +38,6 @@
                                 <th>Manager Name</th>
                                 <th>Subordinate Count</th>
                                 <th>Total Team Hours</th>
-                                <th>Top Project ID</th>
-                                <th>Top Project Name</th>
-                                <th>Top Project Hours</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -59,9 +47,6 @@
                                 <td><strong>{{ row.ManagerName }}</strong></td>
                                 <td>{{ row.SubordinateCount }}</td>
                                 <td>{{ "{:,.2f}".format(row.TotalTeamHours|float) }}</td>
-                                <td>{{ row.TopProjectID or '-' }}</td>
-                                <td>{{ row.TopProjectName or '-' }}</td>
-                                <td>{% if row.TopProjectHours %}{{ "{:,.2f}".format(row.TopProjectHours|float) }}{% else %}-{% endif %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

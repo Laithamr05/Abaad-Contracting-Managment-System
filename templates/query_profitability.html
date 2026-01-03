@@ -25,15 +25,6 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>SQL Statement</h5>
-            </div>
-            <div class="card-body">
-                <pre><code>{{ sql_statement }}</code></pre>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header">
                 <h5>Results</h5>
@@ -51,7 +42,6 @@
                                 <th>Material Cost</th>
                                 <th>Labor Cost</th>
                                 <th>Profit</th>
-                                <th>Profit Margin (%)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -61,19 +51,10 @@
                                 <td><strong>{{ row.ProjectName }}</strong></td>
                                 <td>{{ row.BranchName }}</td>
                                 <td>{{ row.ClientName }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.Revenue|float) }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.MaterialCost|float) }}</td>
-                                <td>SAR {{ "{:,.2f}".format(row.LaborCost|float) }}</td>
-                                <td><strong>SAR {{ "{:,.2f}".format(row.Profit|float) }}</strong></td>
-                                <td>
-                                    {% if row.ProfitMargin|float >= 20 %}
-                                        <span class="badge bg-success">{{ "{:.2f}".format(row.ProfitMargin|float) }}%</span>
-                                    {% elif row.ProfitMargin|float >= 10 %}
-                                        <span class="badge bg-warning">{{ "{:.2f}".format(row.ProfitMargin|float) }}%</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">{{ "{:.2f}".format(row.ProfitMargin|float) }}%</span>
-                                    {% endif %}
-                                </td>
+                                <td>ILS {{ "{:,.2f}".format(row.Revenue|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.MaterialCost|float) }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.LaborCost|float) }}</td>
+                                <td><strong>ILS {{ "{:,.2f}".format(row.Profit|float) }}</strong></td>
                             </tr>
                             {% endfor %}
                         </tbody>

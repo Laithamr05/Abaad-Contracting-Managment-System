@@ -2,13 +2,65 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     min-height: 100vh;
     padding-bottom: 2rem;
 }
 
 .navbar {
     box-shadow: 0 2px 4px rgba(0,0,0,.1);
+    background-color: #212529 !important;
+}
+
+.navbar-brand {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.navbar-logo {
+    height: 50px;
+    width: auto;
+    max-width: 150px;
+    object-fit: contain;
+    display: block;
+}
+
+.nav-link {
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.nav-link:hover {
+    color: #0d6efd !important;
+}
+
+/* Hero Section */
+.hero-section {
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+    padding: 80px 0;
+}
+
+.hero-section h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Footer */
+.footer {
+    background-color: #212529 !important;
+    margin-top: auto;
+}
+
+.footer a:hover {
+    color: #0d6efd !important;
+    text-decoration: underline !important;
+}
+
+.footer h5 {
+    color: #ffffff;
+    font-weight: 600;
+    margin-bottom: 1rem;
 }
 
 .card {

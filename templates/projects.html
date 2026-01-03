@@ -35,6 +35,7 @@
                     <thead>
                         <tr>
                             <th>Project Name</th>
+                            <th>Type</th>
                             <th>Location</th>
                             <th>Branch</th>
                             <th>Client</th>
@@ -47,11 +48,18 @@
                         {% for project in projects %}
                         <tr>
                             <td><strong>{{ project.ProjectName }}</strong></td>
+                            <td>
+                                {% if project.ProjectType == 'solar' %}
+                                    <span class="badge bg-success">Solar</span>
+                                {% else %}
+                                    <span class="badge bg-primary">Building</span>
+                                {% endif %}
+                            </td>
                             <td>{{ project.Location }}</td>
                             <td>{{ project.BranchName }}</td>
                             <td>{{ project.ClientName }}</td>
-                            <td>SAR {{ "{:,}".format(project.Cost|int) }}</td>
-                            <td>SAR {{ "{:,}".format(project.Revenue|int) }}</td>
+                            <td>ILS {{ "{:,}".format(project.Cost|int) }}</td>
+                            <td>ILS {{ "{:,}".format(project.Revenue|int) }}</td>
                             <td>
                                 <a href="{{ url_for('project_details', project_id=project.ProjectID) }}" class="btn btn-sm btn-primary">View Details</a>
                             </td>
@@ -83,13 +91,20 @@
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="cost" class="form-label">Cost (SAR)</label>
+                                <label for="cost" class="form-label">Cost (ILS)</label>
                                 <input type="number" step="0.01" class="form-control" id="cost" name="cost">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="revenue" class="form-label">Revenue (SAR)</label>
+                                <label for="revenue" class="form-label">Revenue (ILS)</label>
                                 <input type="number" step="0.01" class="form-control" id="revenue" name="revenue" required>
                             </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="project_type" class="form-label">Project Type</label>
+                            <select class="form-select" id="project_type" name="project_type" required>
+                                <option value="building">Building Project</option>
+                                <option value="solar">Solar Project</option>
+                            </select>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
