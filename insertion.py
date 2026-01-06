@@ -14,7 +14,7 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             user=os.getenv('DB_USER', 'root'),
-            password=os.getenv('DB_PASS', 'root'),
+            password=os.getenv('DB_PASS', 'l18102005'),
             database=os.getenv('DB_NAME', 'abaad_contracting')
         )
         return connection
@@ -27,7 +27,7 @@ def create_database(connection):
     db_name = os.getenv('DB_NAME', 'abaad_contracting')
     cursor = connection.cursor()
     try:
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
         cursor.execute(f"USE {db_name}")
         print(f"Database '{db_name}' created/selected successfully.")
     except Error as e:
@@ -807,7 +807,7 @@ def main():
         temp_conn = mysql.connector.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             user=os.getenv('DB_USER', 'root'),
-            password=os.getenv('DB_PASS', 'root')
+            password=os.getenv('DB_PASS', 'l18102005')
         )
         create_database(temp_conn)
         temp_conn.close()

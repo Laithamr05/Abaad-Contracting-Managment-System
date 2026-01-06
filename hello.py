@@ -3,12 +3,10 @@ Flask Application for Abaad Contracting Management System
 Main application file with routes and database operations
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash
 import mysql.connector
 from mysql.connector import Error
 import os
-from decimal import Decimal
-from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -19,7 +17,7 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             user=os.getenv('DB_USER', 'root'),
-            password=os.getenv('DB_PASS', 'root'),
+            password=os.getenv('DB_PASS', 'l18102005'),
             database=os.getenv('DB_NAME', 'abaad_contracting')
         )
         return connection
@@ -308,11 +306,9 @@ def project_details(project_id):
     """
     materials = execute_query(materials_query, (project_id,)) or []
     
-    # Calculate total material cost
     total_material_cost = 0.0
     if materials:
         for m in materials:
-            # Handle both Decimal and float types
             quantity = float(m.get('Quantity', 0) or 0)
             unit_price = float(m.get('UnitPrice', 0) or 0)
             total_material_cost += quantity * unit_price
@@ -989,8 +985,6 @@ def query_branch_performance():
                          description='This query compares branch performance by analyzing total revenue, project counts, material costs, labor costs, and profitability.')
 
 if __name__ == '__main__':
-    # Enable template auto-reload in debug mode
     app.config['TEMPLATES_AUTO_RELOAD'] = True
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching
-    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=True)
-
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+    app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=True)
