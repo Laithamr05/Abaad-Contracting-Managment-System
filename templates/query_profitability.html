@@ -38,10 +38,46 @@
                                 <th>Project Name</th>
                                 <th>Branch</th>
                                 <th>Client</th>
-                                <th>Revenue</th>
-                                <th>Material Cost</th>
-                                <th>Labor Cost</th>
-                                <th>Profit</th>
+                                <th>
+                                    Revenue
+                                    <form method="GET" action="{{ url_for('query_profitability') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="Revenue">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'Revenue' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'Revenue' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Material Cost
+                                    <form method="GET" action="{{ url_for('query_profitability') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="MaterialCost">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'MaterialCost' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'MaterialCost' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Labor Cost
+                                    <form method="GET" action="{{ url_for('query_profitability') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="LaborCost">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'LaborCost' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'LaborCost' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Profit
+                                    <form method="GET" action="{{ url_for('query_profitability') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="Profit">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'Profit' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'Profit' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -65,7 +101,6 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
 </body>
 </html>
 

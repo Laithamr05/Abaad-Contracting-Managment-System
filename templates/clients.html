@@ -29,6 +29,29 @@
             {% endif %}
         {% endwith %}
         
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Filters</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('clients') }}" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="filter_has_projects" class="form-label">Has Projects</label>
+                        <select class="form-select" id="filter_has_projects" name="filter_has_projects">
+                            <option value="">All Clients</option>
+                            <option value="yes" {% if filter_has_projects == 'yes' %}selected{% endif %}>With Projects</option>
+                            <option value="no" {% if filter_has_projects == 'no' %}selected{% endif %}>Without Projects</option>
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <a href="{{ url_for('clients') }}" class="btn btn-secondary">Clear Filters</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
         <div class="card">
             <div class="card-body">
                 <table class="table table-striped">
@@ -82,7 +105,6 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
 </body>
 </html>
 

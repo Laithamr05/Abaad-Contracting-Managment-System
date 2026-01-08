@@ -91,6 +91,8 @@ def error_page():
 @app.route('/branches')
 def branches():
     """List and manage branches"""
+    filter_city = request.args.get('filter_city', '')
+    
     query = """
         SELECT b.*, 
                COUNT(DISTINCT e.EmployeeID) as employee_count,
@@ -98,11 +100,19 @@ def branches():
         FROM Branch b
         LEFT JOIN Employee e ON b.BranchID = e.BranchID
         LEFT JOIN Project p ON b.BranchID = p.BranchID
-        GROUP BY b.BranchID
-        ORDER BY b.BranchName
+        WHERE 1=1
     """
-    branches = execute_query(query) or []
-    return render_template('branches.html', branches=branches)
+    params = []
+    
+    if filter_city:
+        query += " AND b.City = %s"
+        params.append(filter_city)
+    
+    query += " GROUP BY b.BranchID ORDER BY b.BranchName"
+    branches = execute_query(query, tuple(params) if params else None) or []
+    
+    cities = execute_query("SELECT DISTINCT City FROM Branch ORDER BY City") or []
+    return render_template('branches.html', branches=branches, cities=cities, filter_city=filter_city)
 
 @app.route('/branches/add', methods=['POST'])
 def add_branch():
@@ -127,6 +137,14 @@ def add_branch():
 @app.route('/employees')
 def employees():
     """List and manage employees"""
+    filter_branch = request.args.get('filter_branch', '')
+    filter_department = request.args.get('filter_department', '')
+    filter_role = request.args.get('filter_role', '')
+    filter_manager = request.args.get('filter_manager', '')
+    filter_is_manager = request.args.get('filter_is_manager', '')
+    sort_by = request.args.get('sort_by', 'EmployeeName')
+    sort_order = request.args.get('sort_order', 'asc').lower() or 'asc'
+    
     query = """
         SELECT e.*, b.BranchName, d.DepartmentName,
                m.EmployeeName as ManagerName, r.Title as Position
@@ -135,9 +153,43 @@ def employees():
         JOIN Department d ON e.DepartmentID = d.DepartmentID
         JOIN Role r ON e.PositionID = r.RoleID
         LEFT JOIN Employee m ON e.ManagerID = m.EmployeeID
-        ORDER BY e.EmployeeName
+        WHERE 1=1
     """
-    employees = execute_query(query) or []
+    params = []
+    
+    if filter_branch:
+        query += " AND e.BranchID = %s"
+        params.append(filter_branch)
+    if filter_department:
+        query += " AND e.DepartmentID = %s"
+        params.append(filter_department)
+    if filter_role:
+        query += " AND e.PositionID = %s"
+        params.append(filter_role)
+    if filter_manager:
+        query += " AND e.ManagerID = %s"
+        params.append(filter_manager)
+    if filter_is_manager:
+        query += " AND e.IsManager = %s"
+        params.append(filter_is_manager == 'true')
+    
+    valid_sort_fields = ['EmployeeName', 'Salary', 'BranchName', 'DepartmentName', 'Position']
+    if sort_by not in valid_sort_fields:
+        sort_by = 'EmployeeName'
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    
+    if sort_by == 'Salary':
+        query += f" ORDER BY e.Salary {sql_sort_order}"
+    elif sort_by == 'BranchName':
+        query += f" ORDER BY b.BranchName {sql_sort_order}"
+    elif sort_by == 'DepartmentName':
+        query += f" ORDER BY d.DepartmentName {sql_sort_order}"
+    elif sort_by == 'Position':
+        query += f" ORDER BY r.Title {sql_sort_order}"
+    else:
+        query += f" ORDER BY e.EmployeeName {sql_sort_order}"
+    
+    employees = execute_query(query, tuple(params) if params else None) or []
     
     # Get branches, departments, roles, and managers for forms
     branches = execute_query("SELECT BranchID, BranchName FROM Branch ORDER BY BranchName") or []
@@ -146,7 +198,10 @@ def employees():
     managers = execute_query("SELECT EmployeeID, EmployeeName FROM Employee WHERE IsManager = TRUE ORDER BY EmployeeName") or []
     
     return render_template('employees.html', employees=employees, branches=branches, 
-                         departments=departments, roles=roles, managers=managers)
+                         departments=departments, roles=roles, managers=managers,
+                         filter_branch=filter_branch, filter_department=filter_department,
+                         filter_role=filter_role, filter_manager=filter_manager, filter_is_manager=filter_is_manager,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/employees/add', methods=['POST'])
 def add_employee():
@@ -177,20 +232,28 @@ def add_employee():
 @app.route('/departments')
 def departments():
     """List and manage departments"""
+    filter_manager = request.args.get('filter_manager', '')
+    
     query = """
         SELECT d.*, e.EmployeeName as ManagerName,
                COUNT(DISTINCT emp.EmployeeID) as employee_count
         FROM Department d
         LEFT JOIN Employee e ON d.ManagerID = e.EmployeeID
         LEFT JOIN Employee emp ON d.DepartmentID = emp.DepartmentID
-        GROUP BY d.DepartmentID
-        ORDER BY d.DepartmentName
+        WHERE 1=1
     """
-    departments = execute_query(query) or []
+    params = []
+    
+    if filter_manager:
+        query += " AND d.ManagerID = %s"
+        params.append(filter_manager)
+    
+    query += " GROUP BY d.DepartmentID ORDER BY d.DepartmentName"
+    departments = execute_query(query, tuple(params) if params else None) or []
     
     employees = execute_query("SELECT EmployeeID, EmployeeName FROM Employee ORDER BY EmployeeName") or []
     
-    return render_template('departments.html', departments=departments, employees=employees)
+    return render_template('departments.html', departments=departments, employees=employees, filter_manager=filter_manager)
 
 @app.route('/departments/set_manager', methods=['POST'])
 def set_department_manager():
@@ -213,15 +276,24 @@ def set_department_manager():
 @app.route('/clients')
 def clients():
     """List and manage clients"""
+    filter_has_projects = request.args.get('filter_has_projects', '')
+    
     query = """
         SELECT c.*, COUNT(DISTINCT p.ProjectID) as project_count
         FROM Client c
         LEFT JOIN Project p ON c.ClientID = p.ClientID
-        GROUP BY c.ClientID
-        ORDER BY c.ClientName
+        WHERE 1=1
     """
-    clients = execute_query(query) or []
-    return render_template('clients.html', clients=clients)
+    params = []
+    
+    if filter_has_projects == 'yes':
+        query += " HAVING COUNT(DISTINCT p.ProjectID) > 0"
+    elif filter_has_projects == 'no':
+        query += " HAVING COUNT(DISTINCT p.ProjectID) = 0"
+    
+    query += " GROUP BY c.ClientID ORDER BY c.ClientName"
+    clients = execute_query(query, tuple(params) if params else None) or []
+    return render_template('clients.html', clients=clients, filter_has_projects=filter_has_projects)
 
 @app.route('/clients/add', methods=['POST'])
 def add_client():
@@ -244,32 +316,47 @@ def add_client():
 @app.route('/projects')
 def projects():
     """List all projects, optionally filtered by type"""
-    project_type = request.args.get('type', None)
+    filter_type = request.args.get('filter_type', '')
+    filter_branch = request.args.get('filter_branch', '')
+    filter_client = request.args.get('filter_client', '')
+    sort_by = request.args.get('sort_by', 'ProjectID')
+    sort_order = request.args.get('sort_order', 'desc').lower()
     
-    if project_type in ['building', 'solar']:
-        query = """
-            SELECT p.*, b.BranchName, c.ClientName
-            FROM Project p
-            JOIN Branch b ON p.BranchID = b.BranchID
-            JOIN Client c ON p.ClientID = c.ClientID
-            WHERE p.ProjectType = %s
-            ORDER BY p.ProjectID DESC
-        """
-        projects = execute_query(query, (project_type,)) or []
+    query = """
+        SELECT p.*, b.BranchName, c.ClientName
+        FROM Project p
+        JOIN Branch b ON p.BranchID = b.BranchID
+        JOIN Client c ON p.ClientID = c.ClientID
+        WHERE 1=1
+    """
+    params = []
+    
+    if filter_type:
+        query += " AND p.ProjectType = %s"
+        params.append(filter_type)
+    if filter_branch:
+        query += " AND p.BranchID = %s"
+        params.append(filter_branch)
+    if filter_client:
+        query += " AND p.ClientID = %s"
+        params.append(filter_client)
+    
+    sql_sort_order = 'ASC' if sort_order == 'asc' else 'DESC'
+    if sort_by == 'Cost':
+        query += f" ORDER BY p.Cost {sql_sort_order}"
+    elif sort_by == 'Revenue':
+        query += f" ORDER BY p.Revenue {sql_sort_order}"
     else:
-        query = """
-            SELECT p.*, b.BranchName, c.ClientName
-            FROM Project p
-            JOIN Branch b ON p.BranchID = b.BranchID
-            JOIN Client c ON p.ClientID = c.ClientID
-            ORDER BY p.ProjectID DESC
-        """
-        projects = execute_query(query) or []
+        query += f" ORDER BY p.ProjectID {sql_sort_order}"
+    
+    projects = execute_query(query, tuple(params) if params else None) or []
     
     branches = execute_query("SELECT BranchID, BranchName FROM Branch ORDER BY BranchName") or []
     clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
     
-    return render_template('projects.html', projects=projects, branches=branches, clients=clients, project_type=project_type)
+    return render_template('projects.html', projects=projects, branches=branches, clients=clients, 
+                         filter_type=filter_type, filter_branch=filter_branch, filter_client=filter_client,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/projects/<int:project_id>')
 def project_details(project_id):
@@ -370,15 +457,24 @@ def add_project():
 @app.route('/suppliers')
 def suppliers():
     """List and manage suppliers"""
+    filter_has_materials = request.args.get('filter_has_materials', '')
+    
     query = """
         SELECT s.*, COUNT(DISTINCT sm.MaterialID) as material_count
         FROM Supplier s
         LEFT JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-        GROUP BY s.SupplierID
-        ORDER BY s.SupplierName
+        WHERE 1=1
     """
-    suppliers = execute_query(query) or []
-    return render_template('suppliers.html', suppliers=suppliers)
+    params = []
+    
+    if filter_has_materials == 'yes':
+        query += " HAVING COUNT(DISTINCT sm.MaterialID) > 0"
+    elif filter_has_materials == 'no':
+        query += " HAVING COUNT(DISTINCT sm.MaterialID) = 0"
+    
+    query += " GROUP BY s.SupplierID ORDER BY s.SupplierName"
+    suppliers = execute_query(query, tuple(params) if params else None) or []
+    return render_template('suppliers.html', suppliers=suppliers, filter_has_materials=filter_has_materials)
 
 @app.route('/suppliers/add', methods=['POST'])
 def add_supplier():
@@ -401,9 +497,28 @@ def add_supplier():
 @app.route('/materials')
 def materials():
     """List and manage materials"""
-    query = "SELECT * FROM Material ORDER BY MaterialName"
-    materials = execute_query(query) or []
-    return render_template('materials.html', materials=materials)
+    filter_unit = request.args.get('filter_unit', '')
+    sort_by = request.args.get('sort_by', 'MaterialName')
+    sort_order = request.args.get('sort_order', 'asc').lower() or 'asc'
+    
+    query = "SELECT * FROM Material WHERE 1=1"
+    params = []
+    
+    if filter_unit:
+        query += " AND UnitOfMeasure = %s"
+        params.append(filter_unit)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'BaseUnitPrice':
+        query += f" ORDER BY BaseUnitPrice {sql_sort_order}"
+    else:
+        query += f" ORDER BY MaterialName {sql_sort_order}"
+    
+    materials = execute_query(query, tuple(params) if params else None) or []
+    
+    units = execute_query("SELECT DISTINCT UnitOfMeasure FROM Material ORDER BY UnitOfMeasure") or []
+    return render_template('materials.html', materials=materials, units=units, filter_unit=filter_unit,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/materials/add', methods=['POST'])
 def add_material():
@@ -427,20 +542,40 @@ def add_material():
 @app.route('/work_assignments')
 def work_assignments():
     """Manage work assignments (employees to projects)"""
+    filter_project = request.args.get('filter_project', '')
+    filter_employee = request.args.get('filter_employee', '')
+    filter_role = request.args.get('filter_role', '')
+    
     query = """
         SELECT wa.*, p.ProjectName, e.EmployeeName, r.Title as Position
         FROM WorkAssignment wa
         JOIN Project p ON wa.ProjectID = p.ProjectID
         JOIN Employee e ON wa.EmployeeID = e.EmployeeID
         JOIN Role r ON e.PositionID = r.RoleID
-        ORDER BY wa.StartDate DESC
+        WHERE 1=1
     """
-    assignments = execute_query(query) or []
+    params = []
+    
+    if filter_project:
+        query += " AND wa.ProjectID = %s"
+        params.append(filter_project)
+    if filter_employee:
+        query += " AND wa.EmployeeID = %s"
+        params.append(filter_employee)
+    if filter_role:
+        query += " AND wa.Role = %s"
+        params.append(filter_role)
+    
+    query += " ORDER BY wa.StartDate DESC"
+    assignments = execute_query(query, tuple(params) if params else None) or []
     
     projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
     employees = execute_query("SELECT EmployeeID, EmployeeName FROM Employee ORDER BY EmployeeName") or []
+    roles = execute_query("SELECT DISTINCT Role FROM WorkAssignment ORDER BY Role") or []
     
-    return render_template('work_assignments.html', assignments=assignments, projects=projects, employees=employees)
+    return render_template('work_assignments.html', assignments=assignments, projects=projects, 
+                         employees=employees, roles=roles,
+                         filter_project=filter_project, filter_employee=filter_employee, filter_role=filter_role)
 
 @app.route('/work_assignments/add', methods=['POST'])
 def add_work_assignment():
@@ -455,14 +590,11 @@ def add_work_assignment():
     query = """
         INSERT INTO WorkAssignment (ProjectID, EmployeeID, Role, HoursWorked, StartDate, EndDate)
         VALUES (%s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-        Role = VALUES(Role), HoursWorked = VALUES(HoursWorked),
-        StartDate = VALUES(StartDate), EndDate = VALUES(EndDate)
     """
     result = execute_query(query, (project_id, employee_id, role, hours, start_date, end_date), fetch=False)
     
     if result:
-        flash('Work assignment added/updated successfully!', 'success')
+        flash('Work assignment added successfully!', 'success')
     else:
         flash('Error adding work assignment', 'error')
     
@@ -473,20 +605,44 @@ def add_work_assignment():
 @app.route('/project_materials')
 def project_materials():
     """Manage project materials"""
+    filter_project = request.args.get('filter_project', '')
+    filter_material = request.args.get('filter_material', '')
+    sort_by = request.args.get('sort_by', 'ProjectName')
+    sort_order = request.args.get('sort_order', 'asc').lower()
+    
     query = """
         SELECT pm.*, p.ProjectName, m.MaterialName, m.UnitOfMeasure
         FROM ProjectMaterial pm
         JOIN Project p ON pm.ProjectID = p.ProjectID
         JOIN Material m ON pm.MaterialID = m.MaterialID
-        ORDER BY p.ProjectName, m.MaterialName
+        WHERE 1=1
     """
-    project_materials = execute_query(query) or []
+    params = []
+    
+    if filter_project:
+        query += " AND pm.ProjectID = %s"
+        params.append(filter_project)
+    if filter_material:
+        query += " AND pm.MaterialID = %s"
+        params.append(filter_material)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'UnitPrice':
+        query += f" ORDER BY pm.UnitPrice {sql_sort_order}"
+    elif sort_by == 'TotalCost':
+        query += f" ORDER BY (pm.Quantity * pm.UnitPrice) {sql_sort_order}"
+    else:
+        query += f" ORDER BY p.ProjectName {sql_sort_order}, m.MaterialName"
+    
+    project_materials = execute_query(query, tuple(params) if params else None) or []
     
     projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
     materials = execute_query("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName") or []
     
     return render_template('project_materials.html', project_materials=project_materials, 
-                         projects=projects, materials=materials)
+                         projects=projects, materials=materials,
+                         filter_project=filter_project, filter_material=filter_material,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/project_materials/add', methods=['POST'])
 def add_project_material():
@@ -499,13 +655,11 @@ def add_project_material():
     query = """
         INSERT INTO ProjectMaterial (ProjectID, MaterialID, Quantity, UnitPrice)
         VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-        Quantity = VALUES(Quantity), UnitPrice = VALUES(UnitPrice)
     """
     result = execute_query(query, (project_id, material_id, quantity, unit_price), fetch=False)
     
     if result:
-        flash('Project material added/updated successfully!', 'success')
+        flash('Project material added successfully!', 'success')
     else:
         flash('Error adding project material', 'error')
     
@@ -516,20 +670,42 @@ def add_project_material():
 @app.route('/supplier_materials')
 def supplier_materials():
     """Manage supplier-material relationships"""
+    filter_supplier = request.args.get('filter_supplier', '')
+    filter_material = request.args.get('filter_material', '')
+    sort_by = request.args.get('sort_by', 'SupplierName')
+    sort_order = request.args.get('sort_order', 'asc').lower()
+    
     query = """
         SELECT sm.*, s.SupplierName, m.MaterialName, m.UnitOfMeasure
         FROM SupplierMaterial sm
         JOIN Supplier s ON sm.SupplierID = s.SupplierID
         JOIN Material m ON sm.MaterialID = m.MaterialID
-        ORDER BY s.SupplierName, m.MaterialName
+        WHERE 1=1
     """
-    supplier_materials = execute_query(query) or []
+    params = []
+    
+    if filter_supplier:
+        query += " AND sm.SupplierID = %s"
+        params.append(filter_supplier)
+    if filter_material:
+        query += " AND sm.MaterialID = %s"
+        params.append(filter_material)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'Price':
+        query += f" ORDER BY sm.Price {sql_sort_order}"
+    else:
+        query += f" ORDER BY s.SupplierName {sql_sort_order}, m.MaterialName"
+    
+    supplier_materials = execute_query(query, tuple(params) if params else None) or []
     
     suppliers = execute_query("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName") or []
     materials = execute_query("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName") or []
     
     return render_template('supplier_materials.html', supplier_materials=supplier_materials,
-                         suppliers=suppliers, materials=materials)
+                         suppliers=suppliers, materials=materials,
+                         filter_supplier=filter_supplier, filter_material=filter_material,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/supplier_materials/add', methods=['POST'])
 def add_supplier_material():
@@ -542,13 +718,11 @@ def add_supplier_material():
     query = """
         INSERT INTO SupplierMaterial (SupplierID, MaterialID, Price, LeadTime)
         VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-        Price = VALUES(Price), LeadTime = VALUES(LeadTime)
     """
     result = execute_query(query, (supplier_id, material_id, price, lead_time), fetch=False)
     
     if result:
-        flash('Supplier material added/updated successfully!', 'success')
+        flash('Supplier material added successfully!', 'success')
     else:
         flash('Error adding supplier material', 'error')
     
@@ -559,19 +733,45 @@ def add_supplier_material():
 @app.route('/contracts')
 def contracts():
     """List and manage contracts"""
+    filter_status = request.args.get('filter_status', '')
+    filter_project = request.args.get('filter_project', '')
+    filter_client = request.args.get('filter_client', '')
+    sort_by = request.args.get('sort_by', 'ContractID')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
     query = """
         SELECT c.*, p.ProjectName, cl.ClientName
         FROM Contract c
         JOIN Project p ON c.ProjectID = p.ProjectID
         JOIN Client cl ON c.ClientID = cl.ClientID
-        ORDER BY c.ContractID DESC
+        WHERE 1=1
     """
-    contracts = execute_query(query) or []
+    params = []
+    
+    if filter_status:
+        query += " AND c.Status = %s"
+        params.append(filter_status)
+    if filter_project:
+        query += " AND c.ProjectID = %s"
+        params.append(filter_project)
+    if filter_client:
+        query += " AND c.ClientID = %s"
+        params.append(filter_client)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'TotalValue':
+        query += f" ORDER BY c.TotalValue {sql_sort_order}"
+    else:
+        query += f" ORDER BY c.ContractID {sql_sort_order}"
+    
+    contracts = execute_query(query, tuple(params) if params else None) or []
     
     projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
     clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
     
-    return render_template('contracts.html', contracts=contracts, projects=projects, clients=clients)
+    return render_template('contracts.html', contracts=contracts, projects=projects, clients=clients,
+                         filter_status=filter_status, filter_project=filter_project, filter_client=filter_client,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/contracts/add', methods=['POST'])
 def add_contract():
@@ -601,17 +801,31 @@ def add_contract():
 @app.route('/phases')
 def phases():
     """List and manage project phases"""
+    filter_project = request.args.get('filter_project', '')
+    filter_status = request.args.get('filter_status', '')
+    
     query = """
         SELECT ph.*, p.ProjectName
         FROM Phase ph
         JOIN Project p ON ph.ProjectID = p.ProjectID
-        ORDER BY ph.PhaseID DESC
+        WHERE 1=1
     """
-    phases = execute_query(query) or []
+    params = []
+    
+    if filter_project:
+        query += " AND ph.ProjectID = %s"
+        params.append(filter_project)
+    if filter_status:
+        query += " AND ph.Status = %s"
+        params.append(filter_status)
+    
+    query += " ORDER BY ph.PhaseID DESC"
+    phases = execute_query(query, tuple(params) if params else None) or []
     
     projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
     
-    return render_template('phases.html', phases=phases, projects=projects)
+    return render_template('phases.html', phases=phases, projects=projects,
+                         filter_project=filter_project, filter_status=filter_status)
 
 @app.route('/phases/add', methods=['POST'])
 def add_phase():
@@ -641,19 +855,33 @@ def add_phase():
 @app.route('/schedules')
 def schedules():
     """List and manage schedules"""
+    filter_project = request.args.get('filter_project', '')
+    filter_phase = request.args.get('filter_phase', '')
+    
     query = """
         SELECT s.*, p.ProjectName, ph.Name as PhaseName
         FROM Schedule s
         JOIN Project p ON s.ProjectID = p.ProjectID
         JOIN Phase ph ON s.PhaseID = ph.PhaseID
-        ORDER BY s.ScheduleID DESC
+        WHERE 1=1
     """
-    schedules = execute_query(query) or []
+    params = []
+    
+    if filter_project:
+        query += " AND s.ProjectID = %s"
+        params.append(filter_project)
+    if filter_phase:
+        query += " AND s.PhaseID = %s"
+        params.append(filter_phase)
+    
+    query += " ORDER BY s.ScheduleID DESC"
+    schedules = execute_query(query, tuple(params) if params else None) or []
     
     projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
     phases = execute_query("SELECT PhaseID, Name, ProjectID FROM Phase ORDER BY PhaseID") or []
     
-    return render_template('schedules.html', schedules=schedules, projects=projects, phases=phases)
+    return render_template('schedules.html', schedules=schedules, projects=projects, phases=phases,
+                         filter_project=filter_project, filter_phase=filter_phase)
 
 @app.route('/schedules/add', methods=['POST'])
 def add_schedule():
@@ -682,19 +910,41 @@ def add_schedule():
 @app.route('/sales')
 def sales():
     """List and manage sales"""
+    filter_project = request.args.get('filter_project', '')
+    filter_client = request.args.get('filter_client', '')
+    sort_by = request.args.get('sort_by', 'SaleID')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
     query = """
         SELECT s.*, p.ProjectName, c.ClientName
         FROM Sales s
         JOIN Project p ON s.ProjectID = p.ProjectID
         JOIN Client c ON s.ClientID = c.ClientID
-        ORDER BY s.SaleID DESC
+        WHERE 1=1
     """
-    sales = execute_query(query) or []
+    params = []
+    
+    if filter_project:
+        query += " AND s.ProjectID = %s"
+        params.append(filter_project)
+    if filter_client:
+        query += " AND s.ClientID = %s"
+        params.append(filter_client)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'Amount':
+        query += f" ORDER BY s.Amount {sql_sort_order}"
+    else:
+        query += f" ORDER BY s.SaleID {sql_sort_order}"
+    
+    sales = execute_query(query, tuple(params) if params else None) or []
     
     projects = execute_query("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName") or []
     clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
     
-    return render_template('sales.html', sales=sales, projects=projects, clients=clients)
+    return render_template('sales.html', sales=sales, projects=projects, clients=clients,
+                         filter_project=filter_project, filter_client=filter_client,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/sales/add', methods=['POST'])
 def add_sale():
@@ -723,19 +973,41 @@ def add_sale():
 @app.route('/purchases')
 def purchases():
     """List and manage purchases"""
+    filter_supplier = request.args.get('filter_supplier', '')
+    filter_material = request.args.get('filter_material', '')
+    sort_by = request.args.get('sort_by', 'PurchaseID')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
     query = """
         SELECT pu.*, s.SupplierName, m.MaterialName
         FROM Purchase pu
         JOIN Supplier s ON pu.SupplierID = s.SupplierID
         JOIN Material m ON pu.MaterialID = m.MaterialID
-        ORDER BY pu.PurchaseID DESC
+        WHERE 1=1
     """
-    purchases = execute_query(query) or []
+    params = []
+    
+    if filter_supplier:
+        query += " AND pu.SupplierID = %s"
+        params.append(filter_supplier)
+    if filter_material:
+        query += " AND pu.MaterialID = %s"
+        params.append(filter_material)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'TotalCost':
+        query += f" ORDER BY pu.TotalCost {sql_sort_order}"
+    else:
+        query += f" ORDER BY pu.PurchaseID {sql_sort_order}"
+    
+    purchases = execute_query(query, tuple(params) if params else None) or []
     
     suppliers = execute_query("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName") or []
     materials = execute_query("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName") or []
     
-    return render_template('purchases.html', purchases=purchases, suppliers=suppliers, materials=materials)
+    return render_template('purchases.html', purchases=purchases, suppliers=suppliers, materials=materials,
+                         filter_supplier=filter_supplier, filter_material=filter_material,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/purchases/add', methods=['POST'])
 def add_purchase():
@@ -764,19 +1036,46 @@ def add_purchase():
 @app.route('/payments')
 def payments():
     """List and manage payments"""
+    filter_type = request.args.get('filter_type', '')
+    filter_client = request.args.get('filter_client', '')
+    filter_supplier = request.args.get('filter_supplier', '')
+    sort_by = request.args.get('sort_by', 'PaymentID')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
     query = """
         SELECT py.*, c.ClientName, s.SupplierName
         FROM Payment py
         LEFT JOIN Client c ON py.FromClient = c.ClientID
         LEFT JOIN Supplier s ON py.ToSupplier = s.SupplierID
-        ORDER BY py.PaymentID DESC
+        WHERE 1=1
     """
-    payments = execute_query(query) or []
+    params = []
+    
+    if filter_type == 'client':
+        query += " AND py.FromClient IS NOT NULL"
+    elif filter_type == 'supplier':
+        query += " AND py.ToSupplier IS NOT NULL"
+    if filter_client:
+        query += " AND py.FromClient = %s"
+        params.append(filter_client)
+    if filter_supplier:
+        query += " AND py.ToSupplier = %s"
+        params.append(filter_supplier)
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    if sort_by == 'Amount':
+        query += f" ORDER BY py.Amount {sql_sort_order}"
+    else:
+        query += f" ORDER BY py.PaymentID {sql_sort_order}"
+    
+    payments = execute_query(query, tuple(params) if params else None) or []
     
     clients = execute_query("SELECT ClientID, ClientName FROM Client ORDER BY ClientName") or []
     suppliers = execute_query("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName") or []
     
-    return render_template('payments.html', payments=payments, clients=clients, suppliers=suppliers)
+    return render_template('payments.html', payments=payments, clients=clients, suppliers=suppliers,
+                         filter_type=filter_type, filter_client=filter_client, filter_supplier=filter_supplier,
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/payments/add', methods=['POST'])
 def add_payment():
@@ -848,7 +1147,19 @@ def all_queries():
 @app.route('/query/profitability')
 def query_profitability():
     """Q1: Project Profitability Analysis"""
-    query = """
+    sort_by = request.args.get('sort_by', 'Profit')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    valid_sorts = {
+        'Revenue': 'p.Revenue',
+        'MaterialCost': 'SUM(pm.Quantity * pm.UnitPrice)',
+        'LaborCost': 'SUM(wa.HoursWorked * (e.Salary / 160))',
+        'Profit': '(p.Revenue - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160)))'
+    }
+    order_clause = valid_sorts.get(sort_by, valid_sorts['Profit'])
+    
+    query = f"""
         SELECT 
             p.ProjectID,
             p.ProjectName,
@@ -865,17 +1176,28 @@ def query_profitability():
         LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
         LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
         GROUP BY p.ProjectID, p.ProjectName, b.BranchName, c.ClientName, p.Revenue
-        ORDER BY Profit DESC
+        ORDER BY {order_clause} {sql_sort_order}
     """
     
     results = execute_query(query) or []
     return render_template('query_profitability.html', results=results,
-                         description='This query calculates project profitability by computing material costs, labor costs (based on employee salaries), and profit.')
+                         description='This query calculates project profitability by computing material costs, labor costs (based on employee salaries), and profit.',
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/query/supplier_impact')
 def query_supplier_impact():
     """Q2: Supplier Impact Analysis"""
-    query = """
+    sort_by = request.args.get('sort_by', 'TotalPotentialValue')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    valid_sorts = {
+        'ProjectCount': 'COUNT(DISTINCT pm.ProjectID)',
+        'TotalPotentialValue': 'SUM(pm.Quantity * sm.Price)'
+    }
+    order_clause = valid_sorts.get(sort_by, valid_sorts['TotalPotentialValue'])
+    
+    query = f"""
         SELECT 
             s.SupplierID,
             s.SupplierName,
@@ -885,17 +1207,28 @@ def query_supplier_impact():
         JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
         JOIN ProjectMaterial pm ON sm.MaterialID = pm.MaterialID
         GROUP BY s.SupplierID, s.SupplierName
-        ORDER BY ProjectCount DESC, TotalPotentialValue DESC
+        ORDER BY {order_clause} {sql_sort_order}
     """
     
     results = execute_query(query) or []
     return render_template('query_supplier_impact.html', results=results,
-                         description='This query analyzes supplier impact by counting distinct projects supplied (via materials) and calculating total potential value.')
+                         description='This query analyzes supplier impact by counting distinct projects supplied (via materials) and calculating total potential value.',
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/query/cost_driver_materials')
 def query_cost_driver_materials():
     """Q3: Cost Driver Materials Analysis"""
-    query = """
+    sort_by = request.args.get('sort_by', 'TotalSpend')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    valid_sorts = {
+        'TotalSpend': 'SUM(pm.Quantity * pm.UnitPrice)',
+        'ProjectCount': 'COUNT(DISTINCT pm.ProjectID)'
+    }
+    order_clause = valid_sorts.get(sort_by, valid_sorts['TotalSpend'])
+    
+    query = f"""
         SELECT 
             m.MaterialID,
             m.MaterialName,
@@ -904,12 +1237,13 @@ def query_cost_driver_materials():
         FROM Material m
         JOIN ProjectMaterial pm ON m.MaterialID = pm.MaterialID
         GROUP BY m.MaterialID, m.MaterialName
-        ORDER BY TotalSpend DESC
+        ORDER BY {order_clause} {sql_sort_order}
     """
     
     results = execute_query(query) or []
     return render_template('query_cost_driver_materials.html', results=results,
-                         description='This query identifies cost-driving materials by total spend and shows how many projects use each material.')
+                         description='This query identifies cost-driving materials by total spend and shows how many projects use each material.',
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/query/employee_utilization')
 def query_employee_utilization():
@@ -935,7 +1269,18 @@ def query_employee_utilization():
 @app.route('/query/price_anomalies')
 def query_price_anomalies():
     """Q5: Price Anomalies Detection"""
-    query = """
+    sort_by = request.args.get('sort_by', 'PercentDifference')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    valid_sorts = {
+        'ProjectPrice': 'pm.UnitPrice',
+        'MinSupplierPrice': 'MIN(sm.Price)',
+        'PercentDifference': 'ROUND(((pm.UnitPrice - MIN(sm.Price)) / MIN(sm.Price)) * 100, 2)'
+    }
+    order_clause = valid_sorts.get(sort_by, valid_sorts['PercentDifference'])
+    
+    query = f"""
         SELECT 
             pm.ProjectID,
             p.ProjectName,
@@ -950,17 +1295,32 @@ def query_price_anomalies():
         JOIN Project p ON pm.ProjectID = p.ProjectID
         GROUP BY pm.ProjectID, p.ProjectName, pm.MaterialID, m.MaterialName, pm.UnitPrice
         HAVING pm.UnitPrice > (MIN(sm.Price) * 1.20)
-        ORDER BY PercentDifference DESC
+        ORDER BY {order_clause} {sql_sort_order}
     """
     
     results = execute_query(query) or []
     return render_template('query_price_anomalies.html', results=results,
-                         description='This query identifies price anomalies where project material prices exceed the minimum supplier price by more than 20%.')
+                         description='This query identifies price anomalies where project material prices exceed the minimum supplier price by more than 20%.',
+                         sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/query/branch_performance')
 def query_branch_performance():
     """Q6: Branch Performance Comparison"""
-    query = """
+    sort_by = request.args.get('sort_by', 'TotalProfit')
+    sort_order = request.args.get('sort_order', 'desc').lower()
+    
+    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
+    valid_sorts = {
+        'ProjectCount': 'COUNT(DISTINCT p.ProjectID)',
+        'TotalRevenue': 'SUM(p.Revenue)',
+        'AvgRevenuePerProject': 'AVG(p.Revenue)',
+        'TotalMaterialCost': 'SUM(pm.Quantity * pm.UnitPrice)',
+        'TotalLaborCost': 'SUM(wa.HoursWorked * (e.Salary / 160))',
+        'TotalProfit': '(SUM(p.Revenue) - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160)))'
+    }
+    order_clause = valid_sorts.get(sort_by, valid_sorts['TotalProfit'])
+    
+    query = f"""
         SELECT 
             b.BranchID,
             b.BranchName,
@@ -977,12 +1337,13 @@ def query_branch_performance():
         LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
         LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
         GROUP BY b.BranchID, b.BranchName, b.City
-        ORDER BY TotalProfit DESC
+        ORDER BY {order_clause} {sql_sort_order}
     """
     
     results = execute_query(query) or []
     return render_template('query_branch_performance.html', results=results,
-                         description='This query compares branch performance by analyzing total revenue, project counts, material costs, labor costs, and profitability.')
+                         description='This query compares branch performance by analyzing total revenue, project counts, material costs, labor costs, and profitability.',
+                         sort_by=sort_by, sort_order=sort_order)
 
 if __name__ == '__main__':
     app.config['TEMPLATES_AUTO_RELOAD'] = True

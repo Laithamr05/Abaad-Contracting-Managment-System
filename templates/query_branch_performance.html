@@ -37,12 +37,66 @@
                                 <th>Branch ID</th>
                                 <th>Branch Name</th>
                                 <th>City</th>
-                                <th>Project Count</th>
-                                <th>Total Revenue</th>
-                                <th>Avg Revenue per Project</th>
-                                <th>Total Material Cost</th>
-                                <th>Total Labor Cost</th>
-                                <th>Total Profit</th>
+                                <th>
+                                    Project Count
+                                    <form method="GET" action="{{ url_for('query_branch_performance') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="ProjectCount">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'ProjectCount' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'ProjectCount' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Total Revenue
+                                    <form method="GET" action="{{ url_for('query_branch_performance') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="TotalRevenue">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'TotalRevenue' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'TotalRevenue' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Avg Revenue per Project
+                                    <form method="GET" action="{{ url_for('query_branch_performance') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="AvgRevenuePerProject">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'AvgRevenuePerProject' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'AvgRevenuePerProject' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Total Material Cost
+                                    <form method="GET" action="{{ url_for('query_branch_performance') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="TotalMaterialCost">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'TotalMaterialCost' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'TotalMaterialCost' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Total Labor Cost
+                                    <form method="GET" action="{{ url_for('query_branch_performance') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="TotalLaborCost">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'TotalLaborCost' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'TotalLaborCost' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Total Profit
+                                    <form method="GET" action="{{ url_for('query_branch_performance') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="TotalProfit">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'TotalProfit' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'TotalProfit' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -67,7 +121,6 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
 </body>
 </html>
 

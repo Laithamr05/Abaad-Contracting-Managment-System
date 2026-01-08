@@ -457,7 +457,7 @@ def insert_seed_data(connection):
         roles_dict = {row[1]: row[0] for row in cursor.fetchall()}
         
         employees = [
-            ("Ahmed Al-Mansouri", roles_dict["CEO"], Decimal("350000.00"), branch_ids[0], dept_ids[0], None, True),
+            ("Osama Amro", roles_dict["CEO"], Decimal("350000.00"), branch_ids[0], dept_ids[0], None, True),
             ("Fatima Al-Zahra", roles_dict["Construction Director"], Decimal("280000.00"), branch_ids[0], dept_ids[0], 1, True),
             ("Khalid Al-Saud", roles_dict["Engineering Manager"], Decimal("240000.00"), branch_ids[0], dept_ids[1], 1, True),
             ("Noura Al-Mutairi", roles_dict["Procurement Manager"], Decimal("220000.00"), branch_ids[0], dept_ids[2], 1, True),

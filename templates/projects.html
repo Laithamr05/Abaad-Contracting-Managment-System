@@ -29,6 +29,85 @@
             {% endif %}
         {% endwith %}
         
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Filters</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('projects') }}" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="filter_type" class="form-label">Project Type</label>
+                        <select class="form-select" id="filter_type" name="filter_type">
+                            <option value="">All Types</option>
+                            <option value="building" {% if filter_type == 'building' %}selected{% endif %}>Building</option>
+                            <option value="solar" {% if filter_type == 'solar' %}selected{% endif %}>Solar</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filter_branch" class="form-label">Branch</label>
+                        <select class="form-select" id="filter_branch" name="filter_branch">
+                            <option value="">All Branches</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.BranchID }}" {% if filter_branch == branch.BranchID|string %}selected{% endif %}>{{ branch.BranchName }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filter_client" class="form-label">Client</label>
+                        <select class="form-select" id="filter_client" name="filter_client">
+                            <option value="">All Clients</option>
+                            {% for client in clients %}
+                            <option value="{{ client.ClientID }}" {% if filter_client == client.ClientID|string %}selected{% endif %}>{{ client.ClientName }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <a href="{{ url_for('projects') }}" class="btn btn-secondary">Clear Filters</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Sort Control -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Sort Options</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('projects') }}" class="row g-3 align-items-end">
+                    {% if filter_type %}<input type="hidden" name="filter_type" value="{{ filter_type }}">{% endif %}
+                    {% if filter_branch %}<input type="hidden" name="filter_branch" value="{{ filter_branch }}">{% endif %}
+                    {% if filter_client %}<input type="hidden" name="filter_client" value="{{ filter_client }}">{% endif %}
+                    <div class="col-md-4">
+                        <label for="sort_by" class="form-label">Sort By</label>
+                        <select class="form-select" id="sort_by" name="sort_by">
+                            <option value="ProjectID" {% if sort_by == 'ProjectID' %}selected{% endif %}>Project ID</option>
+                            <option value="Cost" {% if sort_by == 'Cost' %}selected{% endif %}>Cost</option>
+                            <option value="Revenue" {% if sort_by == 'Revenue' %}selected{% endif %}>Revenue</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Sort Order</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="sort_order" id="sort_asc" value="asc" {% if sort_order == 'asc' %}checked{% endif %}>
+                                <label class="form-check-label" for="sort_asc">↑ Ascending</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="sort_order" id="sort_desc" value="desc" {% if sort_order == 'desc' %}checked{% endif %}>
+                                <label class="form-check-label" for="sort_desc">↓ Descending</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary">Apply Sort</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
         <div class="card">
             <div class="card-body">
                 <table class="table table-striped">
@@ -137,7 +216,6 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
 </body>
 </html>
 
