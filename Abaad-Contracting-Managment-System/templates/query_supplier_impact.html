@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supplier Impact Analysis - Abaad Contracting Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% include 'navbar.html' %}
+    
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Supplier Impact Analysis</h1>
+            <a href="{{ url_for('all_queries') }}" class="btn btn-secondary">Back to Queries</a>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Description</h5>
+            </div>
+            <div class="card-body">
+                <p>{{ description }}</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Results</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Supplier ID</th>
+                                <th>Supplier Name</th>
+                                <th>
+                                    Project Count
+                                    <form method="GET" action="{{ url_for('query_supplier_impact') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="ProjectCount">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'ProjectCount' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'ProjectCount' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Total Potential Value
+                                    <form method="GET" action="{{ url_for('query_supplier_impact') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="TotalPotentialValue">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'TotalPotentialValue' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'TotalPotentialValue' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                                <th>
+                                    Project Count
+                                    <form method="GET" action="{{ url_for('query_supplier_impact') }}" class="d-inline ms-2" onchange="this.submit()">
+                                        <input type="hidden" name="sort_by" value="ProjectCount">
+                                        <select name="sort_order" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                                            <option value="asc" {% if sort_by == 'ProjectCount' and sort_order == 'asc' %}selected{% endif %}>↑ Asc</option>
+                                            <option value="desc" {% if sort_by == 'ProjectCount' and sort_order == 'desc' %}selected{% endif %}>↓ Desc</option>
+                                        </select>
+                                    </form>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in results %}
+                            <tr>
+                                <td>{{ row.SupplierID }}</td>
+                                <td><strong>{{ row.SupplierName }}</strong></td>
+                                <td>{{ row.ProjectCount }}</td>
+                                <td>ILS {{ "{:,.2f}".format(row.TotalPotentialValue|float) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

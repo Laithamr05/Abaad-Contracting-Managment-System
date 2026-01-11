@@ -1,0 +1,44 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Abaad Contracting Logo" class="navbar-logo me-2">
+            <strong>Abaad Contracting</strong>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('projects') }}">Projects</a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-gear"></i> DataBase
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                        <li><a class="dropdown-item" href="{{ url_for('branches') }}">Branches</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('employees') }}">Employees</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('departments') }}">Departments</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('clients') }}">Clients</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('materials') }}">Materials</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('suppliers') }}">Suppliers</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('contracts') }}">Contracts</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('phases') }}">Phases</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('schedules') }}">Schedules</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('sales') }}">Sales</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('purchases') }}">Purchases</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('payments') }}">Payments</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('all_queries') }}">Reports & Queries</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+

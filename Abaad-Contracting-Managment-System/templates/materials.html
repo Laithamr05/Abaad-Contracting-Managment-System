@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Materials - Abaad Contracting Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% include 'navbar.html' %}
+    
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Materials</h1>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaterialModal">
+                Add Material
+            </button>
+        </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Filters</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('materials') }}" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="filter_unit" class="form-label">Unit of Measure</label>
+                        <select class="form-select" id="filter_unit" name="filter_unit">
+                            <option value="">All Units</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.UnitOfMeasure }}" {% if filter_unit == unit.UnitOfMeasure %}selected{% endif %}>{{ unit.UnitOfMeasure }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <a href="{{ url_for('materials') }}" class="btn btn-secondary">Clear Filters</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Sort Control -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Sort Options</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('materials') }}" class="row g-3 align-items-end">
+                    {% if filter_unit %}<input type="hidden" name="filter_unit" value="{{ filter_unit }}">{% endif %}
+                    <div class="col-md-4">
+                        <label for="sort_by" class="form-label">Sort By</label>
+                        <select class="form-select" id="sort_by" name="sort_by">
+                            <option value="MaterialName" {% if sort_by == 'MaterialName' %}selected{% endif %}>Material Name</option>
+                            <option value="BaseUnitPrice" {% if sort_by == 'BaseUnitPrice' %}selected{% endif %}>Base Unit Price</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Sort Order</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="sort_order" id="sort_asc" value="asc" {% if sort_order == 'asc' %}checked{% endif %}>
+                                <label class="form-check-label" for="sort_asc">↑ Ascending</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="sort_order" id="sort_desc" value="desc" {% if sort_order == 'desc' %}checked{% endif %}>
+                                <label class="form-check-label" for="sort_desc">↓ Descending</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary">Apply Sort</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Material Name</th>
+                            <th>Base Unit Price</th>
+                            <th>Unit of Measure</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for material in materials %}
+                        <tr>
+                            <td>{{ material.MaterialID }}</td>
+                            <td><strong>{{ material.MaterialName }}</strong></td>
+                            <td>ILS {{ "{:,.2f}".format(material.BaseUnitPrice|float) }}</td>
+                            <td>{{ material.UnitOfMeasure }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Material Modal -->
+    <div class="modal fade" id="addMaterialModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Material</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="{{ url_for('add_material') }}">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="material_name" class="form-label">Material Name</label>
+                            <input type="text" class="form-control" id="material_name" name="material_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="base_unit_price" class="form-label">Base Unit Price (ILS)</label>
+                            <input type="number" step="0.01" class="form-control" id="base_unit_price" name="base_unit_price" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="unit_of_measure" class="form-label">Unit of Measure</label>
+                            <input type="text" class="form-control" id="unit_of_measure" name="unit_of_measure" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Material</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
