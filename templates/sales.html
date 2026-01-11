@@ -114,7 +114,7 @@
                     <tbody>
                         {% for sale in sales %}
                         <tr>
-                            <td><strong>#{{ sale.SaleID }}</strong></td>
+                            <td><strong>{{ sale.SaleID }}</strong></td>
                             <td>{{ sale.ProjectName }}</td>
                             <td>{{ sale.ClientName }}</td>
                             <td>ILS {{ "{:,}".format(sale.Amount|int) }}</td>

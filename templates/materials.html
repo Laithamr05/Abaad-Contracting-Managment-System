@@ -93,6 +93,7 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Material Name</th>
                             <th>Base Unit Price</th>
                             <th>Unit of Measure</th>
@@ -101,6 +102,7 @@
                     <tbody>
                         {% for material in materials %}
                         <tr>
+                            <td>{{ material.MaterialID }}</td>
                             <td><strong>{{ material.MaterialName }}</strong></td>
                             <td>ILS {{ "{:,.2f}".format(material.BaseUnitPrice|float) }}</td>
                             <td>{{ material.UnitOfMeasure }}</td>

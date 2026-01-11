@@ -53,6 +53,7 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Department Name</th>
                             <th>Manager</th>
                             <th>Employee Count</th>
@@ -62,6 +63,7 @@
                     <tbody>
                         {% for dept in departments %}
                         <tr>
+                            <td>{{ dept.DepartmentID }}</td>
                             <td><strong>{{ dept.DepartmentName }}</strong></td>
                             <td>{{ dept.ManagerName or 'Not Assigned' }}</td>
                             <td>{{ dept.employee_count }}</td>

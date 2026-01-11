@@ -58,6 +58,7 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Branch Name</th>
                             <th>City</th>
                             <th>Address</th>
@@ -69,6 +70,7 @@
                     <tbody>
                         {% for branch in branches %}
                         <tr>
+                            <td>{{ branch.BranchID }}</td>
                             <td><strong>{{ branch.BranchName }}</strong></td>
                             <td>{{ branch.City }}</td>
                             <td>{{ branch.Address }}</td>

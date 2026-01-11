@@ -135,6 +135,7 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Name</th>
                             <th>Position</th>
                             <th>Salary</th>
@@ -147,6 +148,7 @@
                     <tbody>
                         {% for emp in employees %}
                         <tr>
+                            <td>{{ emp.EmployeeID }}</td>
                             <td><strong>{{ emp.EmployeeName }}</strong></td>
                             <td>{{ emp.Position }}</td>
                             <td>ILS {{ "{:,}".format(emp.Salary|int) }}</td>

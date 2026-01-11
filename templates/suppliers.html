@@ -57,6 +57,7 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Supplier Name</th>
                             <th>Contact Info</th>
                             <th>Materials Supplied</th>
@@ -65,6 +66,7 @@
                     <tbody>
                         {% for supplier in suppliers %}
                         <tr>
+                            <td>{{ supplier.SupplierID }}</td>
                             <td><strong>{{ supplier.SupplierName }}</strong></td>
                             <td>{{ supplier.ContactInfo }}</td>
                             <td>{{ supplier.material_count }}</td>

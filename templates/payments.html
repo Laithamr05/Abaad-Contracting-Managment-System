@@ -98,7 +98,7 @@
                     <tbody>
                         {% for payment in payments %}
                         <tr>
-                            <td><strong>#{{ payment.PaymentID }}</strong></td>
+                            <td><strong>{{ payment.PaymentID }}</strong></td>
                             <td>{{ payment.ClientName or '-' }}</td>
                             <td>{{ payment.SupplierName or '-' }}</td>
                             <td>ILS {{ "{:,}".format(payment.Amount|int) }}</td>
