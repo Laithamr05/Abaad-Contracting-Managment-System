@@ -29,6 +29,7 @@ myCursor.execute("DROP TABLE IF EXISTS Supplier")
 myCursor.execute("DROP TABLE IF EXISTS Client")
 myCursor.execute("DROP TABLE IF EXISTS Role")
 myCursor.execute("DROP TABLE IF EXISTS Branch")
+myCursor.execute("DROP TABLE IF EXISTS User")
 
 myCursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
@@ -83,6 +84,16 @@ ALTER TABLE Department
 ADD CONSTRAINT fk_dept_manager
 FOREIGN KEY (ManagerID) REFERENCES Employee(EmployeeID) ON DELETE SET NULL ON UPDATE CASCADE,
 ADD INDEX idx_dept_manager (ManagerID)
+""")
+
+myCursor.execute("""
+CREATE TABLE User (
+    UserID INT AUTO_INCREMENT PRIMARY KEY,
+    Username VARCHAR(50) NOT NULL UNIQUE,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    Password VARCHAR(255) NOT NULL,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
 """)
 
 myCursor.execute("""

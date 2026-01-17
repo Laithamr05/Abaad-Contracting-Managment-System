@@ -12,6 +12,7 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('index') }}">Home</a>
                 </li>
+                {% if current_user.is_authenticated %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('projects') }}">Projects</a>
                 </li>
@@ -37,6 +38,22 @@
                         <li><a class="dropdown-item" href="{{ url_for('all_queries') }}">Reports & Queries</a></li>
                     </ul>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                    </ul>
+                </li>
+                {% else %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('signup') }}">Sign Up</a>
+                </li>
+                {% endif %}
             </ul>
         </div>
     </div>

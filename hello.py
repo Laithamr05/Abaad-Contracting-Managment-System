@@ -1,14 +1,34 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import pymysql
-import pymysql.cursors
 
 myDB = pymysql.connect(host="localhost", user="root", password="l18102005")
-myCursor = myDB.cursor(pymysql.cursors.DictCursor)
+myCursor = myDB.cursor()
 
 myCursor.execute("USE abaad_contracting")
 
 app = Flask(__name__)
-app.secret_key = 'dev-secret-key-change-in-production'
+app.secret_key = 'my_key'
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+
+class User(UserMixin):
+    def __init__(self, user_id, username, email):
+        self.id = user_id
+        self.username = username
+        self.email = email
+
+@login_manager.user_loader
+def load_user(user_id):
+    myCursor.execute("SELECT UserID, Username, Email FROM User WHERE UserID = %s", (user_id,))
+    user_data = myCursor.fetchone()
+    if user_data:
+        return User(user_data[0], user_data[1], user_data[2])
+    return None
 
 @app.route('/')
 def index():
@@ -22,30 +42,86 @@ def index():
             (SELECT COUNT(*) FROM Supplier) as supplier_count
     """
     myCursor.execute(stats_query)
-    stats = myCursor.fetchall()
-    
-    recent_projects_query = """
-        SELECT p.ProjectID, p.ProjectName, p.Location, p.Revenue, 
-               b.BranchName, c.ClientName
-        FROM Project p
-        JOIN Branch b ON p.BranchID = b.BranchID
-        JOIN Client c ON p.ClientID = c.ClientID
-        ORDER BY p.ProjectID DESC
-        LIMIT 5
-    """
-    myCursor.execute(recent_projects_query)
-    recent_projects = myCursor.fetchall() or []
-    
-    return render_template('index.html', stats=stats[0] if stats else {}, recent_projects=recent_projects)
+    columns = [col[0] for col in myCursor.description]
+    stats = [dict(zip(columns, row)) for row in myCursor.fetchall()]
+    return render_template('index.html', stats=stats[0] if stats else {})
 
-@app.route('/error')
-def error_page():
-    error_msg = request.args.get('msg', 'An error occurred')
-    return render_template('error.html', error_msg=error_msg)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            flash('Please enter both username and password', 'error')
+            return render_template('login.html')
+        
+        myCursor.execute("SELECT UserID, Username, Email, Password FROM User WHERE Username = %s", (username,))
+        user_data = myCursor.fetchone()
+        
+        if user_data and check_password_hash(user_data[3], password):
+            user = User(user_data[0], user_data[1], user_data[2])
+            login_user(user)
+            flash('Login successful!', 'success')
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not username or not email or not password:
+            flash('Please fill in all fields', 'error')
+            return render_template('signup.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return render_template('signup.html')
+        
+        if len(password) < 6:
+            flash('Password must be at least 6 characters long', 'error')
+            return render_template('signup.html')
+        
+        myCursor.execute("SELECT UserID FROM User WHERE Username = %s OR Email = %s", (username, email))
+        if myCursor.fetchone():
+            flash('Username or email already exists', 'error')
+            return render_template('signup.html')
+        
+        hashed_password = generate_password_hash(password)
+        myCursor.execute("INSERT INTO User (Username, Email, Password) VALUES (%s, %s, %s)", 
+                        (username, email, hashed_password))
+        myDB.commit()
+        
+        flash('Account created successfully! Please log in.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('signup.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out', 'success')
+    return redirect(url_for('index'))
 
 @app.route('/branches')
+@login_required
 def branches():
-    filter_city = request.args.get('filter_city', '')
+    filter_city = request.args.get('filter_city', '').strip() or None
     
     query = """
         SELECT b.*, 
@@ -54,20 +130,22 @@ def branches():
         FROM Branch b
         LEFT JOIN Employee e ON b.BranchID = e.BranchID
         LEFT JOIN Project p ON b.BranchID = p.BranchID
-        WHERE 1=1
     """
-    params = []
     
     if filter_city:
-        query += " AND b.City = %s"
-        params.append(filter_city)
+        query += " WHERE b.City = %s"
+        query += " GROUP BY b.BranchID ORDER BY b.BranchName"
+        myCursor.execute(query, (filter_city,))
+    else:
+        query += " GROUP BY b.BranchID ORDER BY b.BranchName"
+        myCursor.execute(query)
     
-    query += " GROUP BY b.BranchID ORDER BY b.BranchName"
-    myCursor.execute(query, tuple(params) if params else None)
-    branches = myCursor.fetchall() or []
+    cols = [c[0] for c in myCursor.description]
+    branches = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT DISTINCT City FROM Branch ORDER BY City")
-    cities = myCursor.fetchall() or []
+    cities = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    
     return render_template('branches.html', branches=branches, cities=cities, filter_city=filter_city)
 
 @app.route('/branches/add', methods=['POST'])
@@ -84,15 +162,41 @@ def add_branch():
     flash('Branch added successfully!', 'success')
     return redirect(url_for('branches'))
 
+@app.route('/branches/update/<int:branch_id>', methods=['POST'])
+def update_branch(branch_id):
+    branch_name = request.form.get('branch_name')
+    city = request.form.get('city')
+    address = request.form.get('address')
+    phone = request.form.get('phone')
+    
+    query = "UPDATE Branch SET BranchName = %s, City = %s, Address = %s, PhoneNumber = %s WHERE BranchID = %s"
+    myCursor.execute(query, (branch_name, city, address, phone, branch_id))
+    myDB.commit()
+    
+    flash('Branch updated successfully!', 'success')
+    return redirect(url_for('branches'))
+
+@app.route('/branches/delete/<int:branch_id>', methods=['POST'])
+def delete_branch(branch_id):
+    try:
+        query = "DELETE FROM Branch WHERE BranchID = %s"
+        myCursor.execute(query, (branch_id,))
+        myDB.commit()
+        flash('Branch deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting branch: {str(e)}', 'error')
+    return redirect(url_for('branches'))
+
 @app.route('/employees')
+@login_required
 def employees():
-    filter_branch = request.args.get('filter_branch', '')
-    filter_department = request.args.get('filter_department', '')
-    filter_role = request.args.get('filter_role', '')
-    filter_manager = request.args.get('filter_manager', '')
-    filter_is_manager = request.args.get('filter_is_manager', '')
+    filter_branch = request.args.get('filter_branch', '').strip() or None
+    filter_department = request.args.get('filter_department', '').strip() or None
+    filter_role = request.args.get('filter_role', '').strip() or None
+    filter_manager = request.args.get('filter_manager', '').strip() or None
+    filter_is_manager = request.args.get('filter_is_manager', '').strip() or None
     sort_by = request.args.get('sort_by', 'EmployeeName')
-    sort_order = request.args.get('sort_order', 'asc').lower() or 'asc'
+    sort_order = request.args.get('sort_order', 'asc')
     
     query = """
         SELECT e.*, b.BranchName, d.DepartmentName,
@@ -102,59 +206,58 @@ def employees():
         JOIN Department d ON e.DepartmentID = d.DepartmentID
         JOIN Role r ON e.PositionID = r.RoleID
         LEFT JOIN Employee m ON e.ManagerID = m.EmployeeID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_branch:
-        query += " AND e.BranchID = %s"
+        conditions.append("e.BranchID = %s")
         params.append(filter_branch)
     if filter_department:
-        query += " AND e.DepartmentID = %s"
+        conditions.append("e.DepartmentID = %s")
         params.append(filter_department)
     if filter_role:
-        query += " AND e.PositionID = %s"
+        conditions.append("e.PositionID = %s")
         params.append(filter_role)
     if filter_manager:
-        query += " AND e.ManagerID = %s"
+        conditions.append("e.ManagerID = %s")
         params.append(filter_manager)
     if filter_is_manager:
-        query += " AND e.IsManager = %s"
+        conditions.append("e.IsManager = %s")
         params.append(filter_is_manager == 'true')
     
-    valid_sort_fields = ['EmployeeName', 'Salary', 'BranchName', 'DepartmentName', 'Position']
-    if sort_by not in valid_sort_fields:
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
+    valid_sort_columns = ['EmployeeName', 'Salary']
+    if sort_by not in valid_sort_columns:
         sort_by = 'EmployeeName'
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
     
-    if sort_by == 'Salary':
-        query += f" ORDER BY e.Salary {sql_sort_order}"
-    elif sort_by == 'BranchName':
-        query += f" ORDER BY b.BranchName {sql_sort_order}"
-    elif sort_by == 'DepartmentName':
-        query += f" ORDER BY d.DepartmentName {sql_sort_order}"
-    elif sort_by == 'Position':
-        query += f" ORDER BY r.Title {sql_sort_order}"
+    query += f" ORDER BY e.{sort_by} {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
     else:
-        query += f" ORDER BY e.EmployeeName {sql_sort_order}"
+        myCursor.execute(query)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    employees = myCursor.fetchall() or []
+    cols = [c[0] for c in myCursor.description]
+    employees = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT BranchID, BranchName FROM Branch ORDER BY BranchName")
-    branches = myCursor.fetchall() or []
+    branches = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT DepartmentID, DepartmentName FROM Department ORDER BY DepartmentName")
-    departments = myCursor.fetchall() or []
+    departments = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT RoleID, Title FROM Role ORDER BY Title")
-    roles = myCursor.fetchall() or []
+    roles = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT EmployeeID, EmployeeName FROM Employee WHERE IsManager = TRUE ORDER BY EmployeeName")
-    managers = myCursor.fetchall() or []
+    managers = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('employees.html', employees=employees, branches=branches, 
                          departments=departments, roles=roles, managers=managers,
                          filter_branch=filter_branch, filter_department=filter_department,
-                         filter_role=filter_role, filter_manager=filter_manager, filter_is_manager=filter_is_manager,
-                         sort_by=sort_by, sort_order=sort_order)
+                         filter_role=filter_role, filter_manager=filter_manager,
+                         filter_is_manager=filter_is_manager, sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/employees/add', methods=['POST'])
 def add_employee():
@@ -176,9 +279,42 @@ def add_employee():
     flash('Employee added successfully!', 'success')
     return redirect(url_for('employees'))
 
+@app.route('/employees/update/<int:employee_id>', methods=['POST'])
+def update_employee(employee_id):
+    name = request.form.get('employee_name')
+    position_id = request.form.get('position_id')
+    salary = request.form.get('salary')
+    branch_id = request.form.get('branch_id')
+    dept_id = request.form.get('department_id')
+    manager_id = request.form.get('manager_id') or None
+    is_manager = request.form.get('is_manager') == 'on'
+    
+    query = """
+        UPDATE Employee SET EmployeeName = %s, PositionID = %s, Salary = %s, 
+        BranchID = %s, DepartmentID = %s, ManagerID = %s, IsManager = %s 
+        WHERE EmployeeID = %s
+    """
+    myCursor.execute(query, (name, position_id, salary, branch_id, dept_id, manager_id, is_manager, employee_id))
+    myDB.commit()
+    
+    flash('Employee updated successfully!', 'success')
+    return redirect(url_for('employees'))
+
+@app.route('/employees/delete/<int:employee_id>', methods=['POST'])
+def delete_employee(employee_id):
+    try:
+        query = "DELETE FROM Employee WHERE EmployeeID = %s"
+        myCursor.execute(query, (employee_id,))
+        myDB.commit()
+        flash('Employee deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting employee: {str(e)}', 'error')
+    return redirect(url_for('employees'))
+
 @app.route('/departments')
+@login_required
 def departments():
-    filter_manager = request.args.get('filter_manager', '')
+    filter_manager = request.args.get('filter_manager', '').strip() or None
     
     query = """
         SELECT d.*, e.EmployeeName as ManagerName,
@@ -186,22 +322,36 @@ def departments():
         FROM Department d
         LEFT JOIN Employee e ON d.ManagerID = e.EmployeeID
         LEFT JOIN Employee emp ON d.DepartmentID = emp.DepartmentID
-        WHERE 1=1
     """
-    params = []
     
     if filter_manager:
-        query += " AND d.ManagerID = %s"
-        params.append(filter_manager)
+        query += " WHERE d.ManagerID = %s"
+        query += " GROUP BY d.DepartmentID ORDER BY d.DepartmentName"
+        myCursor.execute(query, (filter_manager,))
+    else:
+        query += " GROUP BY d.DepartmentID ORDER BY d.DepartmentName"
+        myCursor.execute(query)
     
-    query += " GROUP BY d.DepartmentID ORDER BY d.DepartmentName"
-    myCursor.execute(query, tuple(params) if params else None)
-    departments = myCursor.fetchall() or []
+    cols = [c[0] for c in myCursor.description]
+    departments = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
-    myCursor.execute("SELECT EmployeeID, EmployeeName FROM Employee ORDER BY EmployeeName")
-    employees = myCursor.fetchall() or []
+    myCursor.execute("SELECT EmployeeID, EmployeeName FROM Employee WHERE IsManager = TRUE ORDER BY EmployeeName")
+    managers = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    employees = managers
     
-    return render_template('departments.html', departments=departments, employees=employees, filter_manager=filter_manager)
+    return render_template('departments.html', departments=departments, managers=managers, employees=employees, filter_manager=filter_manager)
+
+@app.route('/departments/add', methods=['POST'])
+def add_department():
+    dept_name = request.form.get('department_name')
+    manager_id = request.form.get('manager_id') or None
+    
+    query = "INSERT INTO Department (DepartmentName, ManagerID) VALUES (%s, %s)"
+    myCursor.execute(query, (dept_name, manager_id))
+    myDB.commit()
+    
+    flash('Department added successfully!', 'success')
+    return redirect(url_for('departments'))
 
 @app.route('/departments/set_manager', methods=['POST'])
 def set_department_manager():
@@ -215,26 +365,51 @@ def set_department_manager():
     flash('Department manager updated successfully!', 'success')
     return redirect(url_for('departments'))
 
+@app.route('/departments/update/<int:dept_id>', methods=['POST'])
+def update_department(dept_id):
+    dept_name = request.form.get('department_name')
+    manager_id = request.form.get('manager_id') or None
+    
+    query = "UPDATE Department SET DepartmentName = %s, ManagerID = %s WHERE DepartmentID = %s"
+    myCursor.execute(query, (dept_name, manager_id, dept_id))
+    myDB.commit()
+    
+    flash('Department updated successfully!', 'success')
+    return redirect(url_for('departments'))
+
+@app.route('/departments/delete/<int:dept_id>', methods=['POST'])
+def delete_department(dept_id):
+    try:
+        query = "DELETE FROM Department WHERE DepartmentID = %s"
+        myCursor.execute(query, (dept_id,))
+        myDB.commit()
+        flash('Department deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting department: {str(e)}', 'error')
+    return redirect(url_for('departments'))
+
 @app.route('/clients')
+@login_required
 def clients():
-    filter_has_projects = request.args.get('filter_has_projects', '')
+    filter_has_projects = request.args.get('filter_has_projects', '').strip() or None
     
     query = """
         SELECT c.*, COUNT(DISTINCT p.ProjectID) as project_count
         FROM Client c
         LEFT JOIN Project p ON c.ClientID = p.ClientID
-        WHERE 1=1
     """
-    params = []
     
     if filter_has_projects == 'yes':
-        query += " HAVING COUNT(DISTINCT p.ProjectID) > 0"
+        query += " GROUP BY c.ClientID HAVING COUNT(DISTINCT p.ProjectID) > 0"
     elif filter_has_projects == 'no':
-        query += " HAVING COUNT(DISTINCT p.ProjectID) = 0"
+        query += " GROUP BY c.ClientID HAVING COUNT(DISTINCT p.ProjectID) = 0"
+    else:
+        query += " GROUP BY c.ClientID"
     
-    query += " GROUP BY c.ClientID ORDER BY c.ClientName"
-    myCursor.execute(query, tuple(params) if params else None)
-    clients = myCursor.fetchall() or []
+    query += " ORDER BY c.ClientName"
+    
+    myCursor.execute(query)
+    clients = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     return render_template('clients.html', clients=clients, filter_has_projects=filter_has_projects)
 
 @app.route('/clients/add', methods=['POST'])
@@ -249,54 +424,86 @@ def add_client():
     flash('Client added successfully!', 'success')
     return redirect(url_for('clients'))
 
+@app.route('/clients/update/<int:client_id>', methods=['POST'])
+def update_client(client_id):
+    name = request.form.get('client_name')
+    contact = request.form.get('contact_info')
+    
+    query = "UPDATE Client SET ClientName = %s, ContactInfo = %s WHERE ClientID = %s"
+    myCursor.execute(query, (name, contact, client_id))
+    myDB.commit()
+    
+    flash('Client updated successfully!', 'success')
+    return redirect(url_for('clients'))
+
+@app.route('/clients/delete/<int:client_id>', methods=['POST'])
+def delete_client(client_id):
+    try:
+        query = "DELETE FROM Client WHERE ClientID = %s"
+        myCursor.execute(query, (client_id,))
+        myDB.commit()
+        flash('Client deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting client: {str(e)}', 'error')
+    return redirect(url_for('clients'))
+
 @app.route('/projects')
+@login_required
 def projects():
-    filter_type = request.args.get('filter_type', '')
-    filter_branch = request.args.get('filter_branch', '')
-    filter_client = request.args.get('filter_client', '')
+    filter_type = request.args.get('filter_type', '').strip() or None
+    filter_branch = request.args.get('filter_branch', '').strip() or None
+    filter_client = request.args.get('filter_client', '').strip() or None
     sort_by = request.args.get('sort_by', 'ProjectID')
-    sort_order = request.args.get('sort_order', 'desc').lower()
+    sort_order = request.args.get('sort_order', 'asc')
     
     query = """
         SELECT p.*, b.BranchName, c.ClientName
         FROM Project p
         JOIN Branch b ON p.BranchID = b.BranchID
         JOIN Client c ON p.ClientID = c.ClientID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_type:
-        query += " AND p.ProjectType = %s"
+        conditions.append("p.ProjectType = %s")
         params.append(filter_type)
     if filter_branch:
-        query += " AND p.BranchID = %s"
+        conditions.append("p.BranchID = %s")
         params.append(filter_branch)
     if filter_client:
-        query += " AND p.ClientID = %s"
+        conditions.append("p.ClientID = %s")
         params.append(filter_client)
     
-    sql_sort_order = 'ASC' if sort_order == 'asc' else 'DESC'
-    if sort_by == 'Cost':
-        query += f" ORDER BY p.Cost {sql_sort_order}"
-    elif sort_by == 'Revenue':
-        query += f" ORDER BY p.Revenue {sql_sort_order}"
-    else:
-        query += f" ORDER BY p.ProjectID {sql_sort_order}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    projects = myCursor.fetchall() or []
+    valid_sort_columns = ['ProjectID', 'Cost', 'Revenue']
+    if sort_by not in valid_sort_columns:
+        sort_by = 'ProjectID'
+    
+    query += f" ORDER BY p.{sort_by} {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    cols = [c[0] for c in myCursor.description]
+    projects = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT BranchID, BranchName FROM Branch ORDER BY BranchName")
-    branches = myCursor.fetchall() or []
+    branches = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT ClientID, ClientName FROM Client ORDER BY ClientName")
-    clients = myCursor.fetchall() or []
+    clients = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
-    return render_template('projects.html', projects=projects, branches=branches, clients=clients, 
+    return render_template('projects.html', projects=projects, branches=branches, clients=clients,
                          filter_type=filter_type, filter_branch=filter_branch, filter_client=filter_client,
                          sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/projects/<int:project_id>')
+@login_required
 def project_details(project_id):
     query = """
         SELECT p.*, b.BranchName, c.ClientName
@@ -306,7 +513,8 @@ def project_details(project_id):
         WHERE p.ProjectID = %s
     """
     myCursor.execute(query, (project_id,))
-    project = myCursor.fetchall()
+    cols = [c[0] for c in myCursor.description]
+    project = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     if not project:
         flash('Project not found', 'error')
@@ -320,7 +528,7 @@ def project_details(project_id):
         WHERE wa.ProjectID = %s
     """
     myCursor.execute(assignments_query, (project_id,))
-    assignments = myCursor.fetchall() or []
+    assignments = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     materials_query = """
         SELECT pm.*, m.MaterialName, m.UnitOfMeasure
@@ -329,7 +537,7 @@ def project_details(project_id):
         WHERE pm.ProjectID = %s
     """
     myCursor.execute(materials_query, (project_id,))
-    materials = myCursor.fetchall() or []
+    materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     total_material_cost = 0.0
     if materials:
@@ -374,26 +582,75 @@ def add_project():
     
     return redirect(url_for('projects'))
 
+@app.route('/projects/update/<int:project_id>', methods=['POST'])
+def update_project(project_id):
+    try:
+        name = request.form.get('project_name')
+        location = request.form.get('location')
+        cost = request.form.get('cost') or 0
+        revenue = request.form.get('revenue')
+        project_type = request.form.get('project_type', 'building')
+        branch_id = request.form.get('branch_id')
+        client_id = request.form.get('client_id')
+        
+        myCursor.execute("SHOW COLUMNS FROM Project LIKE 'ProjectType'")
+        has_project_type = myCursor.fetchone() is not None
+        
+        if has_project_type:
+            query = """
+                UPDATE Project SET ProjectName = %s, Location = %s, Cost = %s, 
+                Revenue = %s, ProjectType = %s, BranchID = %s, ClientID = %s 
+                WHERE ProjectID = %s
+            """
+            myCursor.execute(query, (name, location, cost, revenue, project_type, branch_id, client_id, project_id))
+        else:
+            query = """
+                UPDATE Project SET ProjectName = %s, Location = %s, Cost = %s, 
+                Revenue = %s, BranchID = %s, ClientID = %s 
+                WHERE ProjectID = %s
+            """
+            myCursor.execute(query, (name, location, cost, revenue, branch_id, client_id, project_id))
+        
+        myDB.commit()
+        flash('Project updated successfully!', 'success')
+    except Exception as e:
+        flash(f'Error updating project: {str(e)}', 'error')
+    
+    return redirect(url_for('projects'))
+
+@app.route('/projects/delete/<int:project_id>', methods=['POST'])
+def delete_project(project_id):
+    try:
+        query = "DELETE FROM Project WHERE ProjectID = %s"
+        myCursor.execute(query, (project_id,))
+        myDB.commit()
+        flash('Project deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting project: {str(e)}', 'error')
+    return redirect(url_for('projects'))
+
 @app.route('/suppliers')
+@login_required
 def suppliers():
-    filter_has_materials = request.args.get('filter_has_materials', '')
+    filter_has_materials = request.args.get('filter_has_materials', '').strip() or None
     
     query = """
         SELECT s.*, COUNT(DISTINCT sm.MaterialID) as material_count
         FROM Supplier s
         LEFT JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-        WHERE 1=1
     """
-    params = []
     
     if filter_has_materials == 'yes':
-        query += " HAVING COUNT(DISTINCT sm.MaterialID) > 0"
+        query += " GROUP BY s.SupplierID HAVING COUNT(DISTINCT sm.MaterialID) > 0"
     elif filter_has_materials == 'no':
-        query += " HAVING COUNT(DISTINCT sm.MaterialID) = 0"
+        query += " GROUP BY s.SupplierID HAVING COUNT(DISTINCT sm.MaterialID) = 0"
+    else:
+        query += " GROUP BY s.SupplierID"
     
-    query += " GROUP BY s.SupplierID ORDER BY s.SupplierName"
-    myCursor.execute(query, tuple(params) if params else None)
-    suppliers = myCursor.fetchall() or []
+    query += " ORDER BY s.SupplierName"
+    
+    myCursor.execute(query)
+    suppliers = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     return render_template('suppliers.html', suppliers=suppliers, filter_has_materials=filter_has_materials)
 
 @app.route('/suppliers/add', methods=['POST'])
@@ -408,32 +665,64 @@ def add_supplier():
     flash('Supplier added successfully!', 'success')
     return redirect(url_for('suppliers'))
 
-@app.route('/materials')
-def materials():
-    filter_unit = request.args.get('filter_unit', '')
-    sort_by = request.args.get('sort_by', 'MaterialName')
-    sort_order = request.args.get('sort_order', 'asc').lower() or 'asc'
+@app.route('/suppliers/update/<int:supplier_id>', methods=['POST'])
+def update_supplier(supplier_id):
+    name = request.form.get('supplier_name')
+    contact = request.form.get('contact_info')
     
-    query = "SELECT * FROM Material WHERE 1=1"
+    query = "UPDATE Supplier SET SupplierName = %s, ContactInfo = %s WHERE SupplierID = %s"
+    myCursor.execute(query, (name, contact, supplier_id))
+    myDB.commit()
+    
+    flash('Supplier updated successfully!', 'success')
+    return redirect(url_for('suppliers'))
+
+@app.route('/suppliers/delete/<int:supplier_id>', methods=['POST'])
+def delete_supplier(supplier_id):
+    try:
+        query = "DELETE FROM Supplier WHERE SupplierID = %s"
+        myCursor.execute(query, (supplier_id,))
+        myDB.commit()
+        flash('Supplier deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting supplier: {str(e)}', 'error')
+    return redirect(url_for('suppliers'))
+
+@app.route('/materials')
+@login_required
+def materials():
+    filter_unit = request.args.get('filter_unit', '').strip() or None
+    sort_by = request.args.get('sort_by', 'MaterialName')
+    sort_order = request.args.get('sort_order', 'asc')
+    
+    query = "SELECT * FROM Material"
+    conditions = []
     params = []
     
     if filter_unit:
-        query += " AND UnitOfMeasure = %s"
+        conditions.append("UnitOfMeasure = %s")
         params.append(filter_unit)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'BaseUnitPrice':
-        query += f" ORDER BY BaseUnitPrice {sql_sort_order}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
+    valid_sort_columns = ['MaterialName', 'BaseUnitPrice']
+    if sort_by not in valid_sort_columns:
+        sort_by = 'MaterialName'
+    
+    query += f" ORDER BY {sort_by} {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
     else:
-        query += f" ORDER BY MaterialName {sql_sort_order}"
+        myCursor.execute(query)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    materials = myCursor.fetchall() or []
+    materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
-    myCursor.execute("SELECT DISTINCT UnitOfMeasure FROM Material ORDER BY UnitOfMeasure")
-    units = myCursor.fetchall() or []
-    return render_template('materials.html', materials=materials, units=units, filter_unit=filter_unit,
-                         sort_by=sort_by, sort_order=sort_order)
+    myCursor.execute("SELECT DISTINCT UnitOfMeasure FROM Material WHERE UnitOfMeasure IS NOT NULL ORDER BY UnitOfMeasure")
+    units = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    
+    return render_template('materials.html', materials=materials, units=units, filter_unit=filter_unit, sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/materials/add', methods=['POST'])
 def add_material():
@@ -448,46 +737,54 @@ def add_material():
     flash('Material added successfully!', 'success')
     return redirect(url_for('materials'))
 
-@app.route('/work_assignments')
-def work_assignments():
-    filter_project = request.args.get('filter_project', '')
-    filter_employee = request.args.get('filter_employee', '')
-    filter_role = request.args.get('filter_role', '')
+@app.route('/materials/update/<int:material_id>', methods=['POST'])
+def update_material(material_id):
+    name = request.form.get('material_name')
+    base_price = request.form.get('base_unit_price')
+    unit = request.form.get('unit_of_measure')
     
+    query = "UPDATE Material SET MaterialName = %s, BaseUnitPrice = %s, UnitOfMeasure = %s WHERE MaterialID = %s"
+    myCursor.execute(query, (name, base_price, unit, material_id))
+    myDB.commit()
+    
+    flash('Material updated successfully!', 'success')
+    return redirect(url_for('materials'))
+
+@app.route('/materials/delete/<int:material_id>', methods=['POST'])
+def delete_material(material_id):
+    try:
+        query = "DELETE FROM Material WHERE MaterialID = %s"
+        myCursor.execute(query, (material_id,))
+        myDB.commit()
+        flash('Material deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting material: {str(e)}', 'error')
+    return redirect(url_for('materials'))
+
+@app.route('/work_assignments')
+@login_required
+def work_assignments():
     query = """
         SELECT wa.*, p.ProjectName, e.EmployeeName, r.Title as Position
         FROM WorkAssignment wa
         JOIN Project p ON wa.ProjectID = p.ProjectID
         JOIN Employee e ON wa.EmployeeID = e.EmployeeID
         JOIN Role r ON e.PositionID = r.RoleID
-        WHERE 1=1
+        ORDER BY wa.StartDate DESC
     """
-    params = []
-    
-    if filter_project:
-        query += " AND wa.ProjectID = %s"
-        params.append(filter_project)
-    if filter_employee:
-        query += " AND wa.EmployeeID = %s"
-        params.append(filter_employee)
-    if filter_role:
-        query += " AND wa.Role = %s"
-        params.append(filter_role)
-    
-    query += " ORDER BY wa.StartDate DESC"
-    myCursor.execute(query, tuple(params) if params else None)
-    assignments = myCursor.fetchall() or []
+    myCursor.execute(query)
+    cols = [c[0] for c in myCursor.description]
+    assignments = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName")
-    projects = myCursor.fetchall() or []
+    projects = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT EmployeeID, EmployeeName FROM Employee ORDER BY EmployeeName")
-    employees = myCursor.fetchall() or []
+    employees = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT DISTINCT Role FROM WorkAssignment ORDER BY Role")
-    roles = myCursor.fetchall() or []
+    roles = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('work_assignments.html', assignments=assignments, projects=projects, 
-                         employees=employees, roles=roles,
-                         filter_project=filter_project, filter_employee=filter_employee, filter_role=filter_role)
+                         employees=employees, roles=roles)
 
 @app.route('/work_assignments/add', methods=['POST'])
 def add_work_assignment():
@@ -508,44 +805,85 @@ def add_work_assignment():
     flash('Work assignment added successfully!', 'success')
     return redirect(url_for('work_assignments'))
 
+@app.route('/work_assignments/update/<int:assignment_id>', methods=['POST'])
+def update_work_assignment(assignment_id):
+    project_id = request.form.get('project_id')
+    employee_id = request.form.get('employee_id')
+    role = request.form.get('role')
+    hours = request.form.get('hours_worked') or 0
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    
+    query = """
+        UPDATE WorkAssignment SET ProjectID = %s, EmployeeID = %s, Role = %s, 
+        HoursWorked = %s, StartDate = %s, EndDate = %s 
+        WHERE AssignmentID = %s
+    """
+    myCursor.execute(query, (project_id, employee_id, role, hours, start_date, end_date, assignment_id))
+    myDB.commit()
+    
+    flash('Work assignment updated successfully!', 'success')
+    return redirect(url_for('work_assignments'))
+
+@app.route('/work_assignments/delete/<int:assignment_id>', methods=['POST'])
+def delete_work_assignment(assignment_id):
+    try:
+        query = "DELETE FROM WorkAssignment WHERE AssignmentID = %s"
+        myCursor.execute(query, (assignment_id,))
+        myDB.commit()
+        flash('Work assignment deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting work assignment: {str(e)}', 'error')
+    return redirect(url_for('work_assignments'))
+
 @app.route('/project_materials')
+@login_required
 def project_materials():
-    filter_project = request.args.get('filter_project', '')
-    filter_material = request.args.get('filter_material', '')
-    sort_by = request.args.get('sort_by', 'ProjectName')
-    sort_order = request.args.get('sort_order', 'asc').lower()
+    filter_project = request.args.get('filter_project', '').strip() or None
+    filter_material = request.args.get('filter_material', '').strip() or None
+    sort_by = request.args.get('sort_by', 'UnitPrice')
+    sort_order = request.args.get('sort_order', 'asc')
     
     query = """
         SELECT pm.*, p.ProjectName, m.MaterialName, m.UnitOfMeasure
         FROM ProjectMaterial pm
         JOIN Project p ON pm.ProjectID = p.ProjectID
         JOIN Material m ON pm.MaterialID = m.MaterialID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_project:
-        query += " AND pm.ProjectID = %s"
+        conditions.append("pm.ProjectID = %s")
         params.append(filter_project)
     if filter_material:
-        query += " AND pm.MaterialID = %s"
+        conditions.append("pm.MaterialID = %s")
         params.append(filter_material)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'UnitPrice':
-        query += f" ORDER BY pm.UnitPrice {sql_sort_order}"
-    elif sort_by == 'TotalCost':
-        query += f" ORDER BY (pm.Quantity * pm.UnitPrice) {sql_sort_order}"
-    else:
-        query += f" ORDER BY p.ProjectName {sql_sort_order}, m.MaterialName"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    project_materials = myCursor.fetchall() or []
+    valid_sort_columns = ['UnitPrice', 'TotalCost']
+    if sort_by not in valid_sort_columns:
+        sort_by = 'UnitPrice'
+    
+    if sort_by == 'TotalCost':
+        query += f" ORDER BY (pm.Quantity * pm.UnitPrice) {sort_order.upper()}"
+    else:
+        query += f" ORDER BY pm.{sort_by} {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    project_materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName")
-    projects = myCursor.fetchall() or []
+    projects = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName")
-    materials = myCursor.fetchall() or []
+    materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('project_materials.html', project_materials=project_materials, 
                          projects=projects, materials=materials,
@@ -569,42 +907,76 @@ def add_project_material():
     flash('Project material added successfully!', 'success')
     return redirect(url_for('project_materials'))
 
+@app.route('/project_materials/update/<int:project_material_id>', methods=['POST'])
+def update_project_material(project_material_id):
+    project_id = request.form.get('project_id')
+    material_id = request.form.get('material_id')
+    quantity = request.form.get('quantity')
+    unit_price = request.form.get('unit_price')
+    
+    query = """
+        UPDATE ProjectMaterial SET ProjectID = %s, MaterialID = %s, 
+        Quantity = %s, UnitPrice = %s 
+        WHERE ProjectMaterialID = %s
+    """
+    myCursor.execute(query, (project_id, material_id, quantity, unit_price, project_material_id))
+    myDB.commit()
+    
+    flash('Project material updated successfully!', 'success')
+    return redirect(url_for('project_materials'))
+
+@app.route('/project_materials/delete/<int:project_material_id>', methods=['POST'])
+def delete_project_material(project_material_id):
+    try:
+        query = "DELETE FROM ProjectMaterial WHERE ProjectMaterialID = %s"
+        myCursor.execute(query, (project_material_id,))
+        myDB.commit()
+        flash('Project material deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting project material: {str(e)}', 'error')
+    return redirect(url_for('project_materials'))
+
 @app.route('/supplier_materials')
+@login_required
 def supplier_materials():
-    filter_supplier = request.args.get('filter_supplier', '')
-    filter_material = request.args.get('filter_material', '')
-    sort_by = request.args.get('sort_by', 'SupplierName')
-    sort_order = request.args.get('sort_order', 'asc').lower()
+    filter_supplier = request.args.get('filter_supplier', '').strip() or None
+    filter_material = request.args.get('filter_material', '').strip() or None
+    sort_by = request.args.get('sort_by', 'Price')
+    sort_order = request.args.get('sort_order', 'asc')
     
     query = """
         SELECT sm.*, s.SupplierName, m.MaterialName, m.UnitOfMeasure
         FROM SupplierMaterial sm
         JOIN Supplier s ON sm.SupplierID = s.SupplierID
         JOIN Material m ON sm.MaterialID = m.MaterialID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_supplier:
-        query += " AND sm.SupplierID = %s"
+        conditions.append("sm.SupplierID = %s")
         params.append(filter_supplier)
     if filter_material:
-        query += " AND sm.MaterialID = %s"
+        conditions.append("sm.MaterialID = %s")
         params.append(filter_material)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'Price':
-        query += f" ORDER BY sm.Price {sql_sort_order}"
-    else:
-        query += f" ORDER BY s.SupplierName {sql_sort_order}, m.MaterialName"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    supplier_materials = myCursor.fetchall() or []
+    query += f" ORDER BY sm.Price {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    supplier_materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName")
-    suppliers = myCursor.fetchall() or []
+    suppliers = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName")
-    materials = myCursor.fetchall() or []
+    materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('supplier_materials.html', supplier_materials=supplier_materials,
                          suppliers=suppliers, materials=materials,
@@ -628,46 +1000,81 @@ def add_supplier_material():
     flash('Supplier material added successfully!', 'success')
     return redirect(url_for('supplier_materials'))
 
+@app.route('/supplier_materials/update/<int:supplier_material_id>', methods=['POST'])
+def update_supplier_material(supplier_material_id):
+    supplier_id = request.form.get('supplier_id')
+    material_id = request.form.get('material_id')
+    price = request.form.get('price')
+    lead_time = request.form.get('lead_time') or None
+    
+    query = """
+        UPDATE SupplierMaterial SET SupplierID = %s, MaterialID = %s, 
+        Price = %s, LeadTime = %s 
+        WHERE SupplierMaterialID = %s
+    """
+    myCursor.execute(query, (supplier_id, material_id, price, lead_time, supplier_material_id))
+    myDB.commit()
+    
+    flash('Supplier material updated successfully!', 'success')
+    return redirect(url_for('supplier_materials'))
+
+@app.route('/supplier_materials/delete/<int:supplier_material_id>', methods=['POST'])
+def delete_supplier_material(supplier_material_id):
+    try:
+        query = "DELETE FROM SupplierMaterial WHERE SupplierMaterialID = %s"
+        myCursor.execute(query, (supplier_material_id,))
+        myDB.commit()
+        flash('Supplier material deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting supplier material: {str(e)}', 'error')
+    return redirect(url_for('supplier_materials'))
+
 @app.route('/contracts')
+@login_required
 def contracts():
-    filter_status = request.args.get('filter_status', '')
-    filter_project = request.args.get('filter_project', '')
-    filter_client = request.args.get('filter_client', '')
-    sort_by = request.args.get('sort_by', 'ContractID')
-    sort_order = request.args.get('sort_order', 'desc').lower()
+    filter_status = request.args.get('filter_status', '').strip() or None
+    filter_project = request.args.get('filter_project', '').strip() or None
+    filter_client = request.args.get('filter_client', '').strip() or None
+    sort_by = request.args.get('sort_by', 'TotalValue')
+    sort_order = request.args.get('sort_order', 'desc')
     
     query = """
         SELECT c.*, p.ProjectName, cl.ClientName
         FROM Contract c
         JOIN Project p ON c.ProjectID = p.ProjectID
         JOIN Client cl ON c.ClientID = cl.ClientID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_status:
-        query += " AND c.Status = %s"
+        conditions.append("c.Status = %s")
         params.append(filter_status)
     if filter_project:
-        query += " AND c.ProjectID = %s"
+        conditions.append("c.ProjectID = %s")
         params.append(filter_project)
     if filter_client:
-        query += " AND c.ClientID = %s"
+        conditions.append("c.ClientID = %s")
         params.append(filter_client)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'TotalValue':
-        query += f" ORDER BY c.TotalValue {sql_sort_order}"
-    else:
-        query += f" ORDER BY c.ContractID {sql_sort_order}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    contracts = myCursor.fetchall() or []
+    query += f" ORDER BY c.TotalValue {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    cols = [c[0] for c in myCursor.description]
+    contracts = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName")
-    projects = myCursor.fetchall() or []
+    projects = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT ClientID, ClientName FROM Client ORDER BY ClientName")
-    clients = myCursor.fetchall() or []
+    clients = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('contracts.html', contracts=contracts, projects=projects, clients=clients,
                          filter_status=filter_status, filter_project=filter_project, filter_client=filter_client,
@@ -692,32 +1099,73 @@ def add_contract():
     flash('Contract added successfully!', 'success')
     return redirect(url_for('contracts'))
 
+@app.route('/contracts/update/<int:contract_id>', methods=['POST'])
+def update_contract(contract_id):
+    project_id = request.form.get('project_id')
+    client_id = request.form.get('client_id')
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    total_value = request.form.get('total_value')
+    status = request.form.get('status', 'active')
+    
+    query = """
+        UPDATE Contract SET ProjectID = %s, ClientID = %s, StartDate = %s, 
+        EndDate = %s, TotalValue = %s, Status = %s 
+        WHERE ContractID = %s
+    """
+    myCursor.execute(query, (project_id, client_id, start_date, end_date, total_value, status, contract_id))
+    myDB.commit()
+    
+    flash('Contract updated successfully!', 'success')
+    return redirect(url_for('contracts'))
+
+@app.route('/contracts/delete/<int:contract_id>', methods=['POST'])
+def delete_contract(contract_id):
+    try:
+        query = "DELETE FROM Contract WHERE ContractID = %s"
+        myCursor.execute(query, (contract_id,))
+        myDB.commit()
+        flash('Contract deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting contract: {str(e)}', 'error')
+    return redirect(url_for('contracts'))
+
 @app.route('/phases')
+@login_required
 def phases():
-    filter_project = request.args.get('filter_project', '')
-    filter_status = request.args.get('filter_status', '')
+    filter_project = request.args.get('filter_project', '').strip() or None
+    filter_status = request.args.get('filter_status', '').strip() or None
     
     query = """
         SELECT ph.*, p.ProjectName
         FROM Phase ph
         JOIN Project p ON ph.ProjectID = p.ProjectID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_project:
-        query += " AND ph.ProjectID = %s"
+        conditions.append("ph.ProjectID = %s")
         params.append(filter_project)
     if filter_status:
-        query += " AND ph.Status = %s"
+        conditions.append("ph.Status = %s")
         params.append(filter_status)
     
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
     query += " ORDER BY ph.PhaseID DESC"
-    myCursor.execute(query, tuple(params) if params else None)
-    phases = myCursor.fetchall() or []
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    phases = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName")
-    projects = myCursor.fetchall() or []
+    projects = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('phases.html', phases=phases, projects=projects,
                          filter_project=filter_project, filter_status=filter_status)
@@ -741,35 +1189,76 @@ def add_phase():
     flash('Phase added successfully!', 'success')
     return redirect(url_for('phases'))
 
+@app.route('/phases/update/<int:phase_id>', methods=['POST'])
+def update_phase(phase_id):
+    project_id = request.form.get('project_id')
+    name = request.form.get('name')
+    description = request.form.get('description') or None
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    status = request.form.get('status', 'planned')
+    
+    query = """
+        UPDATE Phase SET ProjectID = %s, Name = %s, Description = %s, 
+        StartDate = %s, EndDate = %s, Status = %s 
+        WHERE PhaseID = %s
+    """
+    myCursor.execute(query, (project_id, name, description, start_date, end_date, status, phase_id))
+    myDB.commit()
+    
+    flash('Phase updated successfully!', 'success')
+    return redirect(url_for('phases'))
+
+@app.route('/phases/delete/<int:phase_id>', methods=['POST'])
+def delete_phase(phase_id):
+    try:
+        query = "DELETE FROM Phase WHERE PhaseID = %s"
+        myCursor.execute(query, (phase_id,))
+        myDB.commit()
+        flash('Phase deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting phase: {str(e)}', 'error')
+    return redirect(url_for('phases'))
+
 @app.route('/schedules')
+@login_required
 def schedules():
-    filter_project = request.args.get('filter_project', '')
-    filter_phase = request.args.get('filter_phase', '')
+    filter_project = request.args.get('filter_project', '').strip() or None
+    filter_phase = request.args.get('filter_phase', '').strip() or None
     
     query = """
         SELECT s.*, p.ProjectName, ph.Name as PhaseName
         FROM Schedule s
         JOIN Project p ON s.ProjectID = p.ProjectID
         JOIN Phase ph ON s.PhaseID = ph.PhaseID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_project:
-        query += " AND s.ProjectID = %s"
+        conditions.append("s.ProjectID = %s")
         params.append(filter_project)
     if filter_phase:
-        query += " AND s.PhaseID = %s"
+        conditions.append("s.PhaseID = %s")
         params.append(filter_phase)
     
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
     query += " ORDER BY s.ScheduleID DESC"
-    myCursor.execute(query, tuple(params) if params else None)
-    schedules = myCursor.fetchall() or []
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    schedules = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName")
-    projects = myCursor.fetchall() or []
+    projects = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT PhaseID, Name, ProjectID FROM Phase ORDER BY PhaseID")
-    phases = myCursor.fetchall() or []
+    phases = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('schedules.html', schedules=schedules, projects=projects, phases=phases,
                          filter_project=filter_project, filter_phase=filter_phase)
@@ -792,42 +1281,82 @@ def add_schedule():
     flash('Schedule added successfully!', 'success')
     return redirect(url_for('schedules'))
 
+@app.route('/schedules/update/<int:schedule_id>', methods=['POST'])
+def update_schedule(schedule_id):
+    project_id = request.form.get('project_id')
+    phase_id = request.form.get('phase_id')
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date') or None
+    task_details = request.form.get('task_details') or None
+    
+    query = """
+        UPDATE Schedule SET ProjectID = %s, PhaseID = %s, StartDate = %s, 
+        EndDate = %s, TaskDetails = %s 
+        WHERE ScheduleID = %s
+    """
+    myCursor.execute(query, (project_id, phase_id, start_date, end_date, task_details, schedule_id))
+    myDB.commit()
+    
+    flash('Schedule updated successfully!', 'success')
+    return redirect(url_for('schedules'))
+
+@app.route('/schedules/delete/<int:schedule_id>', methods=['POST'])
+def delete_schedule(schedule_id):
+    try:
+        query = "DELETE FROM Schedule WHERE ScheduleID = %s"
+        myCursor.execute(query, (schedule_id,))
+        myDB.commit()
+        flash('Schedule deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting schedule: {str(e)}', 'error')
+    return redirect(url_for('schedules'))
+
 @app.route('/sales')
+@login_required
 def sales():
-    filter_project = request.args.get('filter_project', '')
-    filter_client = request.args.get('filter_client', '')
+    filter_project = request.args.get('filter_project', '').strip() or None
+    filter_client = request.args.get('filter_client', '').strip() or None
     sort_by = request.args.get('sort_by', 'SaleID')
-    sort_order = request.args.get('sort_order', 'desc').lower()
+    sort_order = request.args.get('sort_order', 'desc')
     
     query = """
         SELECT s.*, p.ProjectName, c.ClientName
         FROM Sales s
         JOIN Project p ON s.ProjectID = p.ProjectID
         JOIN Client c ON s.ClientID = c.ClientID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_project:
-        query += " AND s.ProjectID = %s"
+        conditions.append("s.ProjectID = %s")
         params.append(filter_project)
     if filter_client:
-        query += " AND s.ClientID = %s"
+        conditions.append("s.ClientID = %s")
         params.append(filter_client)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'Amount':
-        query += f" ORDER BY s.Amount {sql_sort_order}"
-    else:
-        query += f" ORDER BY s.SaleID {sql_sort_order}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    sales = myCursor.fetchall() or []
+    valid_sort_columns = ['SaleID', 'Amount']
+    if sort_by not in valid_sort_columns:
+        sort_by = 'SaleID'
+    
+    query += f" ORDER BY s.{sort_by} {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    cols = [c[0] for c in myCursor.description]
+    sales = [dict(zip(cols, r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ProjectID, ProjectName FROM Project ORDER BY ProjectName")
-    projects = myCursor.fetchall() or []
+    projects = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT ClientID, ClientName FROM Client ORDER BY ClientName")
-    clients = myCursor.fetchall() or []
+    clients = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('sales.html', sales=sales, projects=projects, clients=clients,
                          filter_project=filter_project, filter_client=filter_client,
@@ -851,42 +1380,77 @@ def add_sale():
     flash('Sale added successfully!', 'success')
     return redirect(url_for('sales'))
 
+@app.route('/sales/update/<int:sale_id>', methods=['POST'])
+def update_sale(sale_id):
+    project_id = request.form.get('project_id')
+    client_id = request.form.get('client_id')
+    amount = request.form.get('amount')
+    issue_date = request.form.get('issue_date')
+    due_date = request.form.get('due_date') or None
+    
+    query = """
+        UPDATE Sales SET ProjectID = %s, ClientID = %s, Amount = %s, 
+        IssueDate = %s, DueDate = %s 
+        WHERE SaleID = %s
+    """
+    myCursor.execute(query, (project_id, client_id, amount, issue_date, due_date, sale_id))
+    myDB.commit()
+    
+    flash('Sale updated successfully!', 'success')
+    return redirect(url_for('sales'))
+
+@app.route('/sales/delete/<int:sale_id>', methods=['POST'])
+def delete_sale(sale_id):
+    try:
+        query = "DELETE FROM Sales WHERE SaleID = %s"
+        myCursor.execute(query, (sale_id,))
+        myDB.commit()
+        flash('Sale deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting sale: {str(e)}', 'error')
+    return redirect(url_for('sales'))
+
 @app.route('/purchases')
+@login_required
 def purchases():
-    filter_supplier = request.args.get('filter_supplier', '')
-    filter_material = request.args.get('filter_material', '')
-    sort_by = request.args.get('sort_by', 'PurchaseID')
-    sort_order = request.args.get('sort_order', 'desc').lower()
+    filter_supplier = request.args.get('filter_supplier', '').strip() or None
+    filter_material = request.args.get('filter_material', '').strip() or None
+    sort_by = request.args.get('sort_by', 'TotalCost')
+    sort_order = request.args.get('sort_order', 'desc')
     
     query = """
         SELECT pu.*, s.SupplierName, m.MaterialName
         FROM Purchase pu
         JOIN Supplier s ON pu.SupplierID = s.SupplierID
         JOIN Material m ON pu.MaterialID = m.MaterialID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_supplier:
-        query += " AND pu.SupplierID = %s"
+        conditions.append("pu.SupplierID = %s")
         params.append(filter_supplier)
     if filter_material:
-        query += " AND pu.MaterialID = %s"
+        conditions.append("pu.MaterialID = %s")
         params.append(filter_material)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'TotalCost':
-        query += f" ORDER BY pu.TotalCost {sql_sort_order}"
-    else:
-        query += f" ORDER BY pu.PurchaseID {sql_sort_order}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    purchases = myCursor.fetchall() or []
+    query += f" ORDER BY pu.TotalCost {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    purchases = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName")
-    suppliers = myCursor.fetchall() or []
+    suppliers = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT MaterialID, MaterialName FROM Material ORDER BY MaterialName")
-    materials = myCursor.fetchall() or []
+    materials = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('purchases.html', purchases=purchases, suppliers=suppliers, materials=materials,
                          filter_supplier=filter_supplier, filter_material=filter_material,
@@ -910,47 +1474,83 @@ def add_purchase():
     flash('Purchase added successfully!', 'success')
     return redirect(url_for('purchases'))
 
+@app.route('/purchases/update/<int:purchase_id>', methods=['POST'])
+def update_purchase(purchase_id):
+    supplier_id = request.form.get('supplier_id')
+    material_id = request.form.get('material_id')
+    quantity = request.form.get('quantity')
+    purchase_date = request.form.get('purchase_date')
+    total_cost = request.form.get('total_cost')
+    
+    query = """
+        UPDATE Purchase SET SupplierID = %s, MaterialID = %s, Quantity = %s, 
+        PurchaseDate = %s, TotalCost = %s 
+        WHERE PurchaseID = %s
+    """
+    myCursor.execute(query, (supplier_id, material_id, quantity, purchase_date, total_cost, purchase_id))
+    myDB.commit()
+    
+    flash('Purchase updated successfully!', 'success')
+    return redirect(url_for('purchases'))
+
+@app.route('/purchases/delete/<int:purchase_id>', methods=['POST'])
+def delete_purchase(purchase_id):
+    try:
+        query = "DELETE FROM Purchase WHERE PurchaseID = %s"
+        myCursor.execute(query, (purchase_id,))
+        myDB.commit()
+        flash('Purchase deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting purchase: {str(e)}', 'error')
+    return redirect(url_for('purchases'))
+
 @app.route('/payments')
+@login_required
 def payments():
-    filter_type = request.args.get('filter_type', '')
-    filter_client = request.args.get('filter_client', '')
-    filter_supplier = request.args.get('filter_supplier', '')
-    sort_by = request.args.get('sort_by', 'PaymentID')
-    sort_order = request.args.get('sort_order', 'desc').lower()
+    filter_type = request.args.get('filter_type', '').strip() or None
+    filter_client = request.args.get('filter_client', '').strip() or None
+    filter_supplier = request.args.get('filter_supplier', '').strip() or None
+    sort_by = request.args.get('sort_by', 'Amount')
+    sort_order = request.args.get('sort_order', 'desc')
     
     query = """
         SELECT py.*, c.ClientName, s.SupplierName
         FROM Payment py
         LEFT JOIN Client c ON py.FromClient = c.ClientID
         LEFT JOIN Supplier s ON py.ToSupplier = s.SupplierID
-        WHERE 1=1
     """
+    
+    conditions = []
     params = []
     
     if filter_type == 'client':
-        query += " AND py.FromClient IS NOT NULL"
+        conditions.append("py.FromClient IS NOT NULL")
     elif filter_type == 'supplier':
-        query += " AND py.ToSupplier IS NOT NULL"
+        conditions.append("py.ToSupplier IS NOT NULL")
+    
     if filter_client:
-        query += " AND py.FromClient = %s"
+        conditions.append("py.FromClient = %s")
         params.append(filter_client)
     if filter_supplier:
-        query += " AND py.ToSupplier = %s"
+        conditions.append("py.ToSupplier = %s")
         params.append(filter_supplier)
     
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    if sort_by == 'Amount':
-        query += f" ORDER BY py.Amount {sql_sort_order}"
-    else:
-        query += f" ORDER BY py.PaymentID {sql_sort_order}"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     
-    myCursor.execute(query, tuple(params) if params else None)
-    payments = myCursor.fetchall() or []
+    query += f" ORDER BY py.Amount {sort_order.upper()}"
+    
+    if params:
+        myCursor.execute(query, tuple(params))
+    else:
+        myCursor.execute(query)
+    
+    payments = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     myCursor.execute("SELECT ClientID, ClientName FROM Client ORDER BY ClientName")
-    clients = myCursor.fetchall() or []
+    clients = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     myCursor.execute("SELECT SupplierID, SupplierName FROM Supplier ORDER BY SupplierName")
-    suppliers = myCursor.fetchall() or []
+    suppliers = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     
     return render_template('payments.html', payments=payments, clients=clients, suppliers=suppliers,
                          filter_type=filter_type, filter_client=filter_client, filter_supplier=filter_supplier,
@@ -974,250 +1574,164 @@ def add_payment():
     flash('Payment added successfully!', 'success')
     return redirect(url_for('payments'))
 
+@app.route('/payments/update/<int:payment_id>', methods=['POST'])
+def update_payment(payment_id):
+    from_client = request.form.get('from_client') or None
+    to_supplier = request.form.get('to_supplier') or None
+    amount = request.form.get('amount')
+    payment_date = request.form.get('payment_date')
+    payment_method = request.form.get('payment_method')
+    
+    query = """
+        UPDATE Payment SET FromClient = %s, ToSupplier = %s, Amount = %s, 
+        PaymentDate = %s, PaymentMethod = %s 
+        WHERE PaymentID = %s
+    """
+    myCursor.execute(query, (from_client, to_supplier, amount, payment_date, payment_method, payment_id))
+    myDB.commit()
+    
+    flash('Payment updated successfully!', 'success')
+    return redirect(url_for('payments'))
+
+@app.route('/payments/delete/<int:payment_id>', methods=['POST'])
+def delete_payment(payment_id):
+    try:
+        query = "DELETE FROM Payment WHERE PaymentID = %s"
+        myCursor.execute(query, (payment_id,))
+        myDB.commit()
+        flash('Payment deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting payment: {str(e)}', 'error')
+    return redirect(url_for('payments'))
+
 @app.route('/all_queries')
+@login_required
 def all_queries():
     queries = [
         {
             'id': 'profitability',
-            'name': 'Project Profitability Analysis',
-            'description': 'Analyze profitability of all projects including material costs, labor costs, and profit margins',
-            'url': url_for('query_profitability')
+            'name': 'Project Profit',
+            'description': 'Project revenue, cost, and profit',
+            'url': url_for('query_project_profit')
         },
         {
             'id': 'supplier_impact',
-            'name': 'Supplier Impact Analysis',
-            'description': 'Evaluate supplier impact by counting projects supplied and total potential value',
-            'url': url_for('query_supplier_impact')
+            'name': 'Supplier Impact',
+            'description': 'Number of projects per supplier',
+            'url': url_for('query_supplier_projects')
         },
         {
             'id': 'cost_driver_materials',
-            'name': 'Cost Driver Materials Analysis',
-            'description': 'Identify materials driving costs and top projects using each material',
-            'url': url_for('query_cost_driver_materials')
+            'name': 'Material Costs',
+            'description': 'Total spending per material',
+            'url': url_for('query_material_spending')
         },
         {
             'id': 'employee_utilization',
-            'name': 'Employee Utilization by Manager',
-            'description': 'Analyze team utilization, hours, and top projects by manager hierarchy',
-            'url': url_for('query_employee_utilization')
+            'name': 'Team Hours',
+            'description': 'Total hours worked per employee',
+            'url': url_for('query_employee_hours')
         },
         {
             'id': 'price_anomalies',
-            'name': 'Price Anomalies Detection',
-            'description': 'Flag projects where material prices exceed supplier minimum by more than 20%',
-            'url': url_for('query_price_anomalies')
+            'name': 'Price Issues',
+            'description': 'Materials priced above supplier minimum',
+            'url': url_for('query_high_prices')
         },
         {
             'id': 'branch_performance',
-            'name': 'Branch Performance Comparison',
-            'description': 'Compare branch performance by total revenue, project count, and average profitability',
-            'url': url_for('query_branch_performance')
+            'name': 'Branch Performance',
+            'description': 'Projects and revenue per branch',
+            'url': url_for('query_branch_revenue')
         }
     ]
     return render_template('all_queries.html', queries=queries)
 
-@app.route('/query/profitability')
-def query_profitability():
-    sort_by = request.args.get('sort_by', 'Profit')
-    sort_order = request.args.get('sort_order', 'desc').lower()
-    
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    valid_sorts = {
-        'Revenue': 'p.Revenue',
-        'MaterialCost': 'SUM(pm.Quantity * pm.UnitPrice)',
-        'LaborCost': 'SUM(wa.HoursWorked * (e.Salary / 160))',
-        'Profit': '(p.Revenue - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160)))'
-    }
-    order_clause = valid_sorts.get(sort_by, valid_sorts['Profit'])
-    
-    query = f"""
-        SELECT 
-            p.ProjectID,
-            p.ProjectName,
-            b.BranchName,
-            c.ClientName,
-            p.Revenue,
-            SUM(pm.Quantity * pm.UnitPrice) as MaterialCost,
-            SUM(wa.HoursWorked * (e.Salary / 160)) as LaborCost,
-            (p.Revenue - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160))) as Profit
+@app.route('/query/project_profit')
+@login_required
+def query_project_profit():
+    query = """
+        SELECT p.ProjectID, p.ProjectName, p.Revenue, p.Cost, 
+               (p.Revenue - p.Cost) as Profit
         FROM Project p
-        JOIN Branch b ON p.BranchID = b.BranchID
-        JOIN Client c ON p.ClientID = c.ClientID
-        LEFT JOIN ProjectMaterial pm ON p.ProjectID = pm.ProjectID
-        LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
-        LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
-        GROUP BY p.ProjectID, p.ProjectName, b.BranchName, c.ClientName, p.Revenue
-        ORDER BY {order_clause} {sql_sort_order}
+        ORDER BY Profit DESC
     """
-    
     myCursor.execute(query)
-    results = myCursor.fetchall() or []
-    return render_template('query_profitability.html', results=results,
-                         description='This query calculates project profitability by computing material costs, labor costs (based on employee salaries), and profit.',
-                         sort_by=sort_by, sort_order=sort_order)
+    results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    return render_template('query_profitability.html', results=results)
 
-@app.route('/query/supplier_impact')
-def query_supplier_impact():
-    sort_by = request.args.get('sort_by', 'TotalPotentialValue')
-    sort_order = request.args.get('sort_order', 'desc').lower()
-    
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    valid_sorts = {
-        'ProjectCount': 'COUNT(DISTINCT pm.ProjectID)',
-        'TotalPotentialValue': 'SUM(pm.Quantity * sm.Price)'
-    }
-    order_clause = valid_sorts.get(sort_by, valid_sorts['TotalPotentialValue'])
-    
-    query = f"""
-        SELECT 
-            s.SupplierID,
-            s.SupplierName,
-            COUNT(DISTINCT pm.ProjectID) as ProjectCount,
-            SUM(pm.Quantity * sm.Price) as TotalPotentialValue
+@app.route('/query/supplier_projects')
+@login_required
+def query_supplier_projects():
+    query = """
+        SELECT s.SupplierID, s.SupplierName, COUNT(ps.ProjectID) as ProjectCount
         FROM Supplier s
-        JOIN SupplierMaterial sm ON s.SupplierID = sm.SupplierID
-        JOIN ProjectMaterial pm ON sm.MaterialID = pm.MaterialID
+        LEFT JOIN Project_Suppliers ps ON s.SupplierID = ps.SupplierID
         GROUP BY s.SupplierID, s.SupplierName
-        ORDER BY {order_clause} {sql_sort_order}
+        ORDER BY ProjectCount DESC
     """
-    
     myCursor.execute(query)
-    results = myCursor.fetchall() or []
-    return render_template('query_supplier_impact.html', results=results,
-                         description='This query analyzes supplier impact by counting distinct projects supplied (via materials) and calculating total potential value.',
-                         sort_by=sort_by, sort_order=sort_order)
+    results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    return render_template('query_supplier_impact.html', results=results)
 
-@app.route('/query/cost_driver_materials')
-def query_cost_driver_materials():
-    sort_by = request.args.get('sort_by', 'TotalSpend')
-    sort_order = request.args.get('sort_order', 'desc').lower()
-    
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    valid_sorts = {
-        'TotalSpend': 'SUM(pm.Quantity * pm.UnitPrice)',
-        'ProjectCount': 'COUNT(DISTINCT pm.ProjectID)'
-    }
-    order_clause = valid_sorts.get(sort_by, valid_sorts['TotalSpend'])
-    
-    query = f"""
-        SELECT 
-            m.MaterialID,
-            m.MaterialName,
-            SUM(pm.Quantity * pm.UnitPrice) as TotalSpend,
-            COUNT(DISTINCT pm.ProjectID) as ProjectCount
+@app.route('/query/material_spending')
+@login_required
+def query_material_spending():
+    query = """
+        SELECT m.MaterialID, m.MaterialName, SUM(pm.Quantity * pm.UnitPrice) as TotalSpend
         FROM Material m
         JOIN ProjectMaterial pm ON m.MaterialID = pm.MaterialID
         GROUP BY m.MaterialID, m.MaterialName
-        ORDER BY {order_clause} {sql_sort_order}
+        ORDER BY TotalSpend DESC
     """
-    
     myCursor.execute(query)
-    results = myCursor.fetchall() or []
-    return render_template('query_cost_driver_materials.html', results=results,
-                         description='This query identifies cost-driving materials by total spend and shows how many projects use each material.',
-                         sort_by=sort_by, sort_order=sort_order)
+    results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    return render_template('query_cost_driver_materials.html', results=results)
 
-@app.route('/query/employee_utilization')
-def query_employee_utilization():
+@app.route('/query/employee_hours')
+@login_required
+def query_employee_hours():
     query = """
-        SELECT 
-            m.EmployeeID as ManagerID,
-            m.EmployeeName as ManagerName,
-            COUNT(DISTINCT e.EmployeeID) as SubordinateCount,
-            SUM(wa.HoursWorked) as TotalTeamHours
-        FROM Employee m
-        LEFT JOIN Employee e ON e.ManagerID = m.EmployeeID
+        SELECT e.EmployeeID, e.EmployeeName, SUM(wa.HoursWorked) as TotalHours
+        FROM Employee e
         LEFT JOIN WorkAssignment wa ON e.EmployeeID = wa.EmployeeID
-        WHERE m.IsManager = TRUE
-        GROUP BY m.EmployeeID, m.EmployeeName
-        ORDER BY TotalTeamHours DESC
+        GROUP BY e.EmployeeID, e.EmployeeName
+        ORDER BY TotalHours DESC
     """
-    
     myCursor.execute(query)
-    results = myCursor.fetchall() or []
-    return render_template('query_employee_utilization.html', results=results,
-                         description='This query analyzes employee utilization by manager, showing the number of subordinates and total team hours worked.')
+    results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    return render_template('query_employee_utilization.html', results=results)
 
-@app.route('/query/price_anomalies')
-def query_price_anomalies():
-    sort_by = request.args.get('sort_by', 'PercentDifference')
-    sort_order = request.args.get('sort_order', 'desc').lower()
-    
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    valid_sorts = {
-        'ProjectPrice': 'pm.UnitPrice',
-        'MinSupplierPrice': 'MIN(sm.Price)',
-        'PercentDifference': 'ROUND(((pm.UnitPrice - MIN(sm.Price)) / MIN(sm.Price)) * 100, 2)'
-    }
-    order_clause = valid_sorts.get(sort_by, valid_sorts['PercentDifference'])
-    
-    query = f"""
-        SELECT 
-            pm.ProjectID,
-            p.ProjectName,
-            pm.MaterialID,
-            m.MaterialName,
-            pm.UnitPrice as ProjectPrice,
-            MIN(sm.Price) as MinSupplierPrice,
-            ROUND(((pm.UnitPrice - MIN(sm.Price)) / MIN(sm.Price)) * 100, 2) as PercentDifference
+@app.route('/query/high_prices')
+@login_required
+def query_high_prices():
+    query = """
+        SELECT pm.ProjectID, p.ProjectName, m.MaterialName, pm.UnitPrice, MIN(sm.Price) as MinPrice
         FROM ProjectMaterial pm
         JOIN Material m ON pm.MaterialID = m.MaterialID
         JOIN SupplierMaterial sm ON pm.MaterialID = sm.MaterialID
         JOIN Project p ON pm.ProjectID = p.ProjectID
-        GROUP BY pm.ProjectID, p.ProjectName, pm.MaterialID, m.MaterialName, pm.UnitPrice
-        HAVING pm.UnitPrice > (MIN(sm.Price) * 1.20)
-        ORDER BY {order_clause} {sql_sort_order}
+        GROUP BY pm.ProjectID, p.ProjectName, m.MaterialName, pm.UnitPrice
+        HAVING pm.UnitPrice > MIN(sm.Price) * 1.2
+        ORDER BY pm.UnitPrice DESC
     """
-    
     myCursor.execute(query)
-    results = myCursor.fetchall() or []
-    return render_template('query_price_anomalies.html', results=results,
-                         description='This query identifies price anomalies where project material prices exceed the minimum supplier price by more than 20%.',
-                         sort_by=sort_by, sort_order=sort_order)
+    results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    return render_template('query_price_anomalies.html', results=results)
 
-@app.route('/query/branch_performance')
-def query_branch_performance():
-    sort_by = request.args.get('sort_by', 'TotalProfit')
-    sort_order = request.args.get('sort_order', 'desc').lower()
-    
-    sql_sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
-    valid_sorts = {
-        'ProjectCount': 'COUNT(DISTINCT p.ProjectID)',
-        'TotalRevenue': 'SUM(p.Revenue)',
-        'AvgRevenuePerProject': 'AVG(p.Revenue)',
-        'TotalMaterialCost': 'SUM(pm.Quantity * pm.UnitPrice)',
-        'TotalLaborCost': 'SUM(wa.HoursWorked * (e.Salary / 160))',
-        'TotalProfit': '(SUM(p.Revenue) - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160)))'
-    }
-    order_clause = valid_sorts.get(sort_by, valid_sorts['TotalProfit'])
-    
-    query = f"""
-        SELECT 
-            b.BranchID,
-            b.BranchName,
-            b.City,
-            COUNT(DISTINCT p.ProjectID) as ProjectCount,
-            SUM(p.Revenue) as TotalRevenue,
-            AVG(p.Revenue) as AvgRevenuePerProject,
-            SUM(pm.Quantity * pm.UnitPrice) as TotalMaterialCost,
-            SUM(wa.HoursWorked * (e.Salary / 160)) as TotalLaborCost,
-            (SUM(p.Revenue) - SUM(pm.Quantity * pm.UnitPrice) - SUM(wa.HoursWorked * (e.Salary / 160))) as TotalProfit
+@app.route('/query/branch_revenue')
+@login_required
+def query_branch_revenue():
+    query = """
+        SELECT b.BranchID, b.BranchName, b.City, COUNT(p.ProjectID) as ProjectCount, SUM(p.Revenue) as TotalRevenue
         FROM Branch b
         LEFT JOIN Project p ON b.BranchID = p.BranchID
-        LEFT JOIN ProjectMaterial pm ON p.ProjectID = pm.ProjectID
-        LEFT JOIN WorkAssignment wa ON p.ProjectID = wa.ProjectID
-        LEFT JOIN Employee e ON wa.EmployeeID = e.EmployeeID
         GROUP BY b.BranchID, b.BranchName, b.City
-        ORDER BY {order_clause} {sql_sort_order}
+        ORDER BY TotalRevenue DESC
     """
-    
     myCursor.execute(query)
-    results = myCursor.fetchall() or []
-    return render_template('query_branch_performance.html', results=results,
-                         description='This query compares branch performance by analyzing total revenue, project counts, material costs, labor costs, and profitability.',
-                         sort_by=sort_by, sort_order=sort_order)
+    results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
+    return render_template('query_branch_performance.html', results=results)
 
 if __name__ == '__main__':
-    app.config['TEMPLATES_AUTO_RELOAD'] = True
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-    app.run(debug=True, host='127.0.0.1', port=5001, use_reloader=True)
+    app.run(debug=True, port=5001)

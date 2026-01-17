@@ -29,7 +29,7 @@
             {% endif %}
         {% endwith %}
         
-        <!-- Filters -->
+        
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">Filters</h5>
@@ -53,7 +53,7 @@
             </div>
         </div>
         
-        <!-- Sort Control -->
+        
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">Sort Options</h5>
@@ -97,6 +97,7 @@
                             <th>Material Name</th>
                             <th>Base Unit Price</th>
                             <th>Unit of Measure</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -106,6 +107,14 @@
                             <td><strong>{{ material.MaterialName }}</strong></td>
                             <td>ILS {{ "{:,.2f}".format(material.BaseUnitPrice|float) }}</td>
                             <td>{{ material.UnitOfMeasure }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editMaterialModal{{ material.MaterialID }}">
+                                    Update
+                                </button>
+                                <form method="POST" action="{{ url_for('delete_material', material_id=material.MaterialID) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this material?');">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -114,7 +123,7 @@
         </div>
     </div>
     
-    <!-- Add Material Modal -->
+    
     <div class="modal fade" id="addMaterialModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -145,6 +154,40 @@
             </div>
         </div>
     </div>
+    
+    
+    {% for material in materials %}
+    <div class="modal fade" id="editMaterialModal{{ material.MaterialID }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Material</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="{{ url_for('update_material', material_id=material.MaterialID) }}">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="material_name{{ material.MaterialID }}" class="form-label">Material Name</label>
+                            <input type="text" class="form-control" id="material_name{{ material.MaterialID }}" name="material_name" value="{{ material.MaterialName }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="base_unit_price{{ material.MaterialID }}" class="form-label">Base Unit Price (ILS)</label>
+                            <input type="number" step="0.01" class="form-control" id="base_unit_price{{ material.MaterialID }}" name="base_unit_price" value="{{ material.BaseUnitPrice }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="unit_of_measure{{ material.MaterialID }}" class="form-label">Unit of Measure</label>
+                            <input type="text" class="form-control" id="unit_of_measure{{ material.MaterialID }}" name="unit_of_measure" value="{{ material.UnitOfMeasure }}" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Update Material</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

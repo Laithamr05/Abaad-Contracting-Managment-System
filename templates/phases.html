@@ -29,7 +29,7 @@
             {% endif %}
         {% endwith %}
         
-        <!-- Filters -->
+        
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">Filters</h5>
@@ -73,6 +73,7 @@
                             <th>Start Date</th>
                             <th>End Date</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -88,6 +89,14 @@
                                     {{ phase.Status }}
                                 </span>
                             </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editPhaseModal{{ phase.PhaseID }}">
+                                    Update
+                                </button>
+                                <form method="POST" action="{{ url_for('delete_phase', phase_id=phase.PhaseID) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this phase?');">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -96,7 +105,7 @@
         </div>
     </div>
     
-    <!-- Add Phase Modal -->
+    
     <div class="modal fade" id="addPhaseModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -150,6 +159,63 @@
             </div>
         </div>
     </div>
+    
+    
+    {% for phase in phases %}
+    <div class="modal fade" id="editPhaseModal{{ phase.PhaseID }}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Phase</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="{{ url_for('update_phase', phase_id=phase.PhaseID) }}">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="project_id{{ phase.PhaseID }}" class="form-label">Project</label>
+                            <select class="form-select" id="project_id{{ phase.PhaseID }}" name="project_id" required>
+                                <option value="">Select Project</option>
+                                {% for project in projects %}
+                                <option value="{{ project.ProjectID }}" {% if phase.ProjectID == project.ProjectID %}selected{% endif %}>{{ project.ProjectName }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="name{{ phase.PhaseID }}" class="form-label">Phase Name</label>
+                            <input type="text" class="form-control" id="name{{ phase.PhaseID }}" name="name" value="{{ phase.Name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description{{ phase.PhaseID }}" class="form-label">Description (Optional)</label>
+                            <textarea class="form-control" id="description{{ phase.PhaseID }}" name="description" rows="3">{{ phase.Description or '' }}</textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="start_date{{ phase.PhaseID }}" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="start_date{{ phase.PhaseID }}" name="start_date" value="{{ phase.StartDate }}" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="end_date{{ phase.PhaseID }}" class="form-label">End Date (Optional)</label>
+                                <input type="date" class="form-control" id="end_date{{ phase.PhaseID }}" name="end_date" value="{{ phase.EndDate or '' }}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="status{{ phase.PhaseID }}" class="form-label">Status</label>
+                            <select class="form-select" id="status{{ phase.PhaseID }}" name="status" required>
+                                <option value="planned" {% if phase.Status == 'planned' %}selected{% endif %}>Planned</option>
+                                <option value="in_progress" {% if phase.Status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                <option value="completed" {% if phase.Status == 'completed' %}selected{% endif %}>Completed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Update Phase</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
