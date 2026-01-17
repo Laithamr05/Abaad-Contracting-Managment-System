@@ -66,7 +66,7 @@ python3 hello.py
 
 The application will be available at `http://localhost:5001`
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 Abaad-Contracting-Managment-System/
