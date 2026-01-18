@@ -2,26 +2,26 @@
 
 A comprehensive Flask-based database management system for a construction/contracting company, designed to manage projects, employees, clients, suppliers, and financial operations.
 
-## 📋 Description
+##  Description
 
 This is a full-stack web application for managing a contracting company's operations. The system handles project management, employee assignments, material procurement, supplier relationships, financial tracking, and provides comprehensive analytics and reporting capabilities.
 
 The application supports both building construction projects and solar energy installations, with branches located in Palestinian cities (Ramallah, Nablus, Jerusalem).
 
-## 🚀 Technology Stack
+##  Technology Stack
 
 - **Backend**: Python 3.x + Flask
 - **Database**: MySQL 8.0+
 - **Frontend**: HTML/CSS/JavaScript (Bootstrap 5)
 - **Architecture**: Server-side rendered web application
 
-## 📦 Prerequisites
+##  Prerequisites
 
 - Python 3.x
 - MySQL 8.0+
 - pip (Python package manager)
 
-## 🛠️ Installation & Setup
+##  Installation & Setup
 
 ### 1. Install Dependencies
 
@@ -66,7 +66,7 @@ python3 hello.py
 
 The application will be available at `http://localhost:5001`
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 Abaad-Contracting-Managment-System/
@@ -89,7 +89,7 @@ Abaad-Contracting-Managment-System/
         └── logo.png
 ```
 
-## ✨ Features
+##  Features
 
 ### Entity Management
 - **Branches** - Manage company branches across different cities
@@ -109,7 +109,7 @@ Abaad-Contracting-Managment-System/
 - **Project Materials** - Material allocation to projects
 - **Supplier Materials** - Supplier-material relationships with pricing
 
-### 📊 Reports & Analytics
+###  Reports & Analytics
 - **Project Profitability Analysis** - Calculate profit margins including material and labor costs
 - **Supplier Impact Analysis** - Evaluate supplier impact by project count and value
 - **Cost Driver Materials Analysis** - Identify materials driving costs across projects
@@ -117,11 +117,11 @@ Abaad-Contracting-Managment-System/
 - **Price Anomalies Detection** - Flag projects with material prices exceeding supplier minimums
 - **Branch Performance Comparison** - Compare branch performance metrics
 
-### 🏗️ Project Types
+###  Project Types
 - **Building Projects** - Construction and building projects
 - **Solar Projects** - Solar energy installation projects
 
-## 🗄️ Database Schema
+##  Database Schema
 
 The system uses 18 main tables:
 
@@ -139,7 +139,7 @@ The system uses 18 main tables:
 
 All tables include proper foreign key relationships, indexes for performance, and support for cascading deletes where appropriate.
 
-## ⚙️ Configuration
+##  Configuration
 
 ### Default Settings
 - **Currency**: ILS (Israeli Shekel)
@@ -153,14 +153,14 @@ All tables include proper foreign key relationships, indexes for performance, an
 - `DB_NAME` - Database name (default: abaad_contracting)
 - `SECRET_KEY` - Flask secret key for sessions
 
-## 📝 Notes
+##  Notes
 
 - The application uses simplified SQL queries (no CTEs, window functions, or advanced SQL features)
 - All database operations use basic SELECT, JOIN, GROUP BY, and aggregation functions
 - The system is designed for easy maintenance and understanding
 - Debug mode is enabled by default for development
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Port Already in Use
 If port 5001 is in use, you can change it in `hello.py`:
@@ -179,11 +179,11 @@ Make sure all dependencies are installed:
 pip3 install -r requirements.txt
 ```
 
-## 📄 License
+##  License
 
 This project is for educational/portfolio purposes.
 
-## 👤 Author
+##  Author
 
 Abaad Contracting Company Management System
 
