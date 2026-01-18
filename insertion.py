@@ -9,8 +9,6 @@ myCursor.execute("CREATE DATABASE abaad_contracting")
 myCursor.execute("USE abaad_contracting")
 myCursor.execute("SET SQL_SAFE_UPDATES=0")
 
-myCursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-
 myCursor.execute("DROP TABLE IF EXISTS Payment")
 myCursor.execute("DROP TABLE IF EXISTS Purchase")
 myCursor.execute("DROP TABLE IF EXISTS Project_Suppliers")
@@ -30,8 +28,6 @@ myCursor.execute("DROP TABLE IF EXISTS Client")
 myCursor.execute("DROP TABLE IF EXISTS Role")
 myCursor.execute("DROP TABLE IF EXISTS Branch")
 myCursor.execute("DROP TABLE IF EXISTS User")
-
-myCursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
 myCursor.execute("""
 CREATE TABLE Branch (
