@@ -9,13 +9,9 @@ venv/
 ENV/
 .venv
 
-# Environment variables
-.env
-.env.local
-
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
@@ -24,25 +20,10 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-*.log
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-
 # Flask
 instance/
 .webassets-cache
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
+# Environment variables
+.env
+.env.local
