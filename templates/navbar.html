@@ -2,60 +2,277 @@
     <div class="container">
         <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Abaad Contracting Logo" class="navbar-logo me-2">
-            <strong>Abaad Contracting</strong>
+            <span class="brand-text">Abaad Contracting</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-lg-center">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('index') }}">Home</a>
-                </li>
-                {% if current_user.is_authenticated %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('projects') }}">Projects</a>
-                </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear"></i> DataBase
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                        <li><a class="dropdown-item" href="{{ url_for('branches') }}">Branches</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('employees') }}">Employees</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('departments') }}">Departments</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('clients') }}">Clients</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('materials') }}">Materials</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('suppliers') }}">Suppliers</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{{ url_for('contracts') }}">Contracts</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('phases') }}">Phases</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('schedules') }}">Schedules</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('sales') }}">Sales</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('purchases') }}">Purchases</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('payments') }}">Payments</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{{ url_for('all_queries') }}">Reports & Queries</a></li>
-                    </ul>
-                </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-person-circle"></i> {{ current_user.username }}
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                        <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
-                    </ul>
-                </li>
-                {% else %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                    <a class="nav-link" href="{{ url_for('index') }}" data-i18n-key="nav-home">Home</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('signup') }}">Sign Up</a>
+                    <a class="nav-link" href="{{ url_for('about') }}" data-i18n-key="nav-about">About</a>
                 </li>
+
+                {% if current_user.is_authenticated and current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('projects') }}" data-i18n-key="nav-projects">Projects</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-gear"></i> <span data-i18n-key="nav-database">DataBase</span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('branches') }}">Branches</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('employees') }}">Employees</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('departments') }}">Departments</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('clients') }}">Clients</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('materials') }}">Materials</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('suppliers') }}">Suppliers</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('contracts') }}">Contracts</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('phases') }}">Phases</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('schedules') }}">Schedules</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('sales') }}">Sales</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('purchases') }}">Purchases</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('payments') }}">Payments</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('all_queries') }}" data-i18n-key="nav-reports">Reports &amp; Queries</a></li>
+                        </ul>
+                    </li>
                 {% endif %}
+
+                {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}" data-i18n-key="nav-logout">Logout</a></li>
+                        </ul>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login') }}" data-i18n-key="nav-login">Login</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('signup') }}" data-i18n-key="nav-signup">Sign Up</a>
+                    </li>
+                {% endif %}
+
+                <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+                    <button id="themeToggle" class="btn btn-sm btn-outline-light me-2" type="button" aria-label="Toggle dark mode">
+                        <i class="bi bi-moon"></i>
+                    </button>
+                    <button id="langToggle" class="btn btn-sm btn-outline-light" type="button" aria-label="Toggle language">
+                        <span id="langToggleLabel">AR</span>
+                    </button>
+                </li>
             </ul>
         </div>
     </div>
 </nav>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const body = document.body;
+    const htmlEl = document.documentElement;
+    const themeToggle = document.getElementById('themeToggle');
+    const langToggle = document.getElementById('langToggle');
+    const langToggleLabel = document.getElementById('langToggleLabel');
+
+    const translations = {
+        en: {
+            'nav-home': 'Home',
+            'nav-about': 'About',
+            'nav-projects': 'Projects',
+            'nav-database': 'DataBase',
+            'nav-reports': 'Reports & Queries',
+            'nav-login': 'Login',
+            'nav-signup': 'Sign Up',
+            'nav-logout': 'Logout',
+            'hero-title': 'Who are we?',
+            'home-hero-text': "ABA'AD Contracting Company (A.C.C.) was established in 1998 as a limited liability company based in Ramallah, West Bank. Since 1998, A.C.C. has built a reputation as a premier contractor in the West Bank, driven by a passion for excellence as instilled by A.C.C.'s founders Eng.Osama Amro and Zaid Amro. As a result, our client base has grown consistently since day one, culminating today in annual revenues of 20 Million USD.",
+            'about-hero-text': "ABA’AD Contracting Company (A.C.C.) was established in 1998 as a limited liability company based in Ramallah, West Bank. Since then, A.C.C. has built a reputation as a premier contractor in the West Bank, driven by a passion for excellence as instilled by its founders Eng. Osama Amro and Zaid Amro.",
+            'about-deep-rooted': 'Deep Rooted Experience',
+            'about-safety': 'Safety',
+            'about-leadership': 'Leadership',
+            'about-partners': 'Our Partners',
+            'about-team': 'Our Team',
+            'about-hero-extra': 'Our client base has grown consistently since day one, culminating today in annual revenues of over 20 Million USD. We combine deep technical expertise, disciplined project management, and a strong commitment to safety and quality.',
+            'about-deep-rooted-text': 'Abaad has been working in the local market since 1999, with deep knowledge of the Palestinian construction sector. We continuously adapt to remain highly competent in the face of market challenges.',
+            'about-safety-text': 'The safety of our employees and the public is everyone’s responsibility. We plan safety into every aspect of our work and strive for zero incidents on all projects.',
+            'about-leadership-text': 'Every employee is expected to give their best, strive for quality, and demonstrate the highest level of professionalism — leading by example on every site.',
+            'about-partners-text': 'Over the years, Abaad has partnered with leading institutions, public entities, and international organizations to deliver strategic projects across Palestine.',
+            'about-team-text': 'A leadership team combining engineering excellence, operational discipline, and a passion for building long-term partnerships.',
+            'about-team-osama-name': 'Osama Amro',
+            'about-team-mohammad-name': 'Mohammad Hamoda',
+            'about-team-zaid-name': 'Zaid Amro',
+            'about-team-ammar-name': 'Ammar Amro',
+            'about-team-osama-role': 'General Manager & Founder',
+            'about-team-mohammad-role': 'Solar Division Manager',
+            'about-team-zaid-role': 'Partner & Operations Manager',
+            'about-team-ammar-role': 'Project Engineer',
+            'footer-brand': 'Abaad Contracting',
+            'footer-tagline': 'Building with precision since 1998',
+            'footer-address-line1': '6 Hanna Naqara Street',
+            'footer-address-line2': 'Palestine, ZZ 521',
+            'footer-phone-label': 'Phone:',
+            'footer-email-label': 'Email:',
+            'footer-quick-links': 'Quick Links',
+            'footer-home': 'Home',
+            'footer-about': 'About',
+            'footer-projects': 'Projects Dashboard',
+            'footer-reports': 'Reports & Analytics',
+            'footer-working-with-us': 'Working With Us',
+            'footer-working-text': 'We are excited to take on your project. Reach out and our team will get back to you as soon as possible.',
+            'footer-call': 'Call Us',
+            'footer-email': 'Email Us',
+            'footer-copyright': '© 1998–2026 Abaad Contracting. All rights reserved.',
+            'footer-designed-for': 'Designed for the Abaad Contracting Management System project.'
+            ,
+            'stats-branches-label': 'Branches',
+            'stats-employees-label': 'Employees',
+            'stats-projects-label': 'Projects',
+            'stats-clients-label': 'Clients',
+            'home-management-title': 'Management Console',
+            'home-management-projects-title': 'Projects',
+            'home-management-projects-text': 'Create, update, and monitor all projects.',
+            'home-management-projects-link': 'Go to Projects',
+            'home-management-employees-title': 'Employees',
+            'home-management-employees-text': 'Manage the Abaad team and assignments.',
+            'home-management-employees-link': 'Go to Employees',
+            'home-management-reports-title': 'Reports & Queries',
+            'home-management-reports-text': 'Access analytics, profitability, and performance.',
+            'home-management-reports-link': 'View Reports'
+        },
+        ar: {
+            'nav-home': 'الرئيسية',
+            'nav-about': 'من نحن',
+            'nav-projects': 'المشاريع',
+            'nav-database': 'قاعدة البيانات',
+            'nav-reports': 'التقارير والاستعلامات',
+            'nav-login': 'تسجيل الدخول',
+            'nav-signup': 'إنشاء حساب',
+            'nav-logout': 'تسجيل الخروج',
+            'hero-title': 'من نحن؟',
+            'home-hero-text': 'تأسست شركة أبعاد للمقاولات كشركة ذات مسؤولية محدودة عام 1998 في رام الله بالضفة الغربية. منذ ذلك الحين بنت أبعاد سمعة متميزة كمقاول رائد في السوق الفلسطيني مدفوعةً بشغف التميز الذي غرسه المؤسسون م. أسامة عمرو وزيد عمرو، مما أدى إلى نمو مستمر في قاعدة عملائنا وإيرادات سنوية تتجاوز 20 مليون دولار.',
+            'about-hero-text': 'تأسست شركة أبعاد للمقاولات (أ.س.س) عام 1998 كشركة ذات مسؤولية محدودة مقرها رام الله في الضفة الغربية، وبنت سمعتها كمقاول رائد في فلسطين بفضل خبرتها العميقة والتزامها بالجودة والسلامة.',
+            'about-deep-rooted': 'خبرة عميقة الجذور',
+            'about-safety': 'السلامة',
+            'about-leadership': 'القيادة',
+            'about-partners': 'شركاؤنا',
+            'about-team': 'فريقنا',
+            'about-hero-extra': 'نمت قاعدة عملائنا بشكل مستمر منذ اليوم الأول، لتصل اليوم إلى إيرادات سنوية تتجاوز 20 مليون دولار، مع مزيج من الخبرة الفنية العميقة والإدارة المنضبطة للمشاريع والالتزام التام بالسلامة والجودة.',
+            'about-deep-rooted-text': 'تعمل أبعاد في السوق المحلي منذ عام 1999 بخبرة واسعة في قطاع الإنشاءات الفلسطيني، وتحرص على التطور المستمر للحفاظ على كفاءتها العالية في مواجهة تحديات السوق.',
+            'about-safety-text': 'سلامة موظفينا والجمهور مسؤولية الجميع، لذلك ندمج معايير السلامة في جميع مراحل العمل ونسعى للوصول إلى صفر حوادث في كل مشروع.',
+            'about-leadership-text': 'نتوقع من كل موظف أن يبذل أفضل ما لديه، ويحافظ على أعلى مستويات الجودة والمهنية، ويقود بالقدوة في كل موقع عمل.',
+            'about-partners-text': 'على مدار السنوات الماضية تعاونت أبعاد مع مؤسسات رائدة وهيئات حكومية ومنظمات دولية لتنفيذ مشاريع استراتيجية في مختلف أنحاء فلسطين.',
+            'about-team-text': 'فريق قيادي يجمع بين الخبرة الهندسية والانضباط التشغيلي والشغف ببناء شراكات طويلة الأمد.',
+            'about-team-osama-name': 'أسامة عمرو',
+            'about-team-mohammad-name': 'محمد حمودة',
+            'about-team-zaid-name': 'زيد عمرو',
+            'about-team-ammar-name': 'عمّار عمرو',
+            'about-team-osama-role': 'المدير العام والمؤسس',
+            'about-team-mohammad-role': 'مدير قسم الطاقة الشمسية',
+            'about-team-zaid-role': 'شريك ومدير العمليات',
+            'about-team-ammar-role': 'مهندس مشروع',
+            'footer-brand': 'أبعاد للمقاولات',
+            'footer-tagline': 'نبني بدقة منذ عام 1998',
+            'footer-address-line1': 'شارع حنّا نقارة 6',
+            'footer-address-line2': 'فلسطين، ZZ 521',
+            'footer-phone-label': 'هاتف:',
+            'footer-email-label': 'البريد الإلكتروني:',
+            'footer-quick-links': 'روابط سريعة',
+            'footer-home': 'الرئيسية',
+            'footer-about': 'من نحن',
+            'footer-projects': 'لوحة تحكم المشاريع',
+            'footer-reports': 'التقارير والتحليلات',
+            'footer-working-with-us': 'العمل معنا',
+            'footer-working-text': 'نحن متحمسون للعمل على مشروعك. تواصل معنا وسيتواصل فريقنا معك في أقرب وقت ممكن.',
+            'footer-call': 'اتصل بنا',
+            'footer-email': 'راسلنا',
+            'footer-copyright': '© 1998–2026 شركة أبعاد للمقاولات. جميع الحقوق محفوظة.',
+            'footer-designed-for': 'مصمم لمشروع نظام إدارة شركة أبعاد للمقاولات.'
+            ,
+            'stats-branches-label': 'الفروع',
+            'stats-employees-label': 'الموظفون',
+            'stats-projects-label': 'المشاريع',
+            'stats-clients-label': 'العملاء',
+            'home-management-title': 'لوحة إدارة النظام',
+            'home-management-projects-title': 'المشاريع',
+            'home-management-projects-text': 'إنشاء المشاريع وتحديثها ومتابعة تقدمها.',
+            'home-management-projects-link': 'الانتقال إلى المشاريع',
+            'home-management-employees-title': 'الموظفون',
+            'home-management-employees-text': 'إدارة فريق أبعاد وتوزيع المهام.',
+            'home-management-employees-link': 'الانتقال إلى الموظفين',
+            'home-management-reports-title': 'التقارير والاستعلامات',
+            'home-management-reports-text': 'الوصول إلى التحليلات والربحية والأداء.',
+            'home-management-reports-link': 'عرض التقارير'
+        }
+    };
+
+    function applyTranslations(lang) {
+        document.querySelectorAll('[data-i18n-key]').forEach(function (el) {
+            const key = el.getAttribute('data-i18n-key');
+            const text = translations[lang] && translations[lang][key];
+            if (text) {
+                el.textContent = text;
+            }
+        });
+    }
+
+    function setTheme(theme) {
+        if (theme === 'dark') {
+            body.classList.add('dark-mode');
+            if (themeToggle) {
+                themeToggle.innerHTML = '<i class="bi bi-sun"></i>';
+            }
+        } else {
+            body.classList.remove('dark-mode');
+            if (themeToggle) {
+                themeToggle.innerHTML = '<i class="bi bi-moon"></i>';
+            }
+        }
+        localStorage.setItem('abaad-theme', theme);
+    }
+
+    function setLanguage(lang) {
+        const target = (lang === 'ar') ? 'ar' : 'en';
+        htmlEl.lang = target;
+        htmlEl.dir = target === 'ar' ? 'rtl' : 'ltr';
+        body.classList.toggle('lang-ar', target === 'ar');
+        applyTranslations(target);
+        if (langToggleLabel) {
+            langToggleLabel.textContent = target === 'ar' ? 'EN' : 'AR';
+        }
+        localStorage.setItem('abaad-lang', target);
+    }
+
+    // Initialize theme
+    const savedTheme = localStorage.getItem('abaad-theme') || 'light';
+    setTheme(savedTheme);
+
+    // Initialize language
+    const savedLang = localStorage.getItem('abaad-lang') || 'en';
+    setLanguage(savedLang);
+
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+            const nextTheme = body.classList.contains('dark-mode') ? 'light' : 'dark';
+            setTheme(nextTheme);
+        });
+    }
+
+    if (langToggle) {
+        langToggle.addEventListener('click', function () {
+            const current = localStorage.getItem('abaad-lang') || 'en';
+            const next = current === 'en' ? 'ar' : 'en';
+            setLanguage(next);
+        });
+    }
+});
+</script>
 

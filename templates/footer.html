@@ -1,0 +1,60 @@
+<footer class="footer text-white py-5 mt-5">
+    <div class="container">
+        <div class="row gy-4 align-items-center">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-3">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Abaad Contracting Logo" class="navbar-logo me-2">
+                    <div>
+                        <h5 class="mb-0" data-i18n-key="footer-brand">Abaad Contracting</h5>
+                        <small class="text-muted" data-i18n-key="footer-tagline">Building with precision since 1998</small>
+                    </div>
+                </div>
+                <p class="mb-1 small text-muted">
+                    <span data-i18n-key="footer-address-line1">6 Hanna Naqara Street</span><br>
+                    <span data-i18n-key="footer-address-line2">Palestine, ZZ 521</span>
+                </p>
+                <p class="mb-1 small">
+                    <span class="text-muted" data-i18n-key="footer-phone-label">Phone:</span>
+                    <span dir="ltr">+970 22989898</span>
+                </p>
+                <p class="mb-0 small">
+                    <span class="text-muted" data-i18n-key="footer-email-label">Email:</span>
+                    info@abaad.ps
+                </p>
+            </div>
+
+            <div class="col-md-4">
+                <h5 data-i18n-key="footer-quick-links">Quick Links</h5>
+                <ul class="list-unstyled small mb-0">
+                    <li><a href="{{ url_for('index') }}" class="text-decoration-none text-muted" data-i18n-key="footer-home">Home</a></li>
+                    <li><a href="{{ url_for('about') }}" class="text-decoration-none text-muted" data-i18n-key="footer-about">About</a></li>
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                        <li><a href="{{ url_for('projects') }}" class="text-decoration-none text-muted" data-i18n-key="footer-projects">Projects Dashboard</a></li>
+                        <li><a href="{{ url_for('all_queries') }}" class="text-decoration-none text-muted" data-i18n-key="footer-reports">Reports &amp; Analytics</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <div class="col-md-4">
+                <h5 data-i18n-key="footer-working-with-us">Working With Us</h5>
+                <p class="small text-muted mb-3" data-i18n-key="footer-working-text">
+                    We are excited to take on your project. Reach out and our team will get back to you as soon as possible.
+                </p>
+                <a href="tel:+97022989898" class="btn btn-sm btn-primary me-2 mb-2" data-i18n-key="footer-call">Call Us</a>
+                <a href="mailto:info@abaad.ps" class="btn btn-sm btn-outline-light mb-2" data-i18n-key="footer-email">Email Us</a>
+            </div>
+        </div>
+
+        <hr class="border-secondary my-4">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
+            <p class="small mb-2 mb-md-0 text-muted" data-i18n-key="footer-copyright">
+                &copy; 1998&ndash;2026 Abaad Contracting. All rights reserved.
+            </p>
+            <p class="small mb-0 text-muted" data-i18n-key="footer-designed-for">
+                Designed for the Abaad Contracting Management System project.
+            </p>
+        </div>
+    </div>
+</footer>
+

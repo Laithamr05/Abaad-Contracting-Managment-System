@@ -1,15 +1,34 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import pymysql
+from functools import wraps
+import os
 
 myDB = pymysql.connect(host="localhost", user="root", password="l18102005")
 myCursor = myDB.cursor()
 
 myCursor.execute("USE abaad_contracting")
 
-app = Flask(__name__)
+# Get the project root directory (parent of backend/)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+static_folder = os.path.join(project_root, 'static', 'react-build')
+templates_folder = os.path.join(project_root, 'templates')
+root_static_folder = os.path.join(project_root, 'static')
+
+app = Flask(__name__, 
+            static_folder=static_folder, 
+            static_url_path='',
+            template_folder=templates_folder)
 app.secret_key = 'my_key'
+CORS(app, supports_credentials=True)
+
+# Serve static CSS and images from root static folder
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files from the root static folder (CSS, images, etc.)"""
+    return send_from_directory(root_static_folder, filename)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -17,21 +36,120 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Please log in to access this page.'
 
 class User(UserMixin):
-    def __init__(self, user_id, username, email):
+    def __init__(self, user_id, username, email, is_admin=False):
         self.id = user_id
         self.username = username
         self.email = email
+        self.is_admin = is_admin
 
 @login_manager.user_loader
 def load_user(user_id):
     myCursor.execute("SELECT UserID, Username, Email FROM User WHERE UserID = %s", (user_id,))
     user_data = myCursor.fetchone()
     if user_data:
-        return User(user_data[0], user_data[1], user_data[2])
+        is_admin = (user_data[1] or "").lower() == "admin"
+        return User(user_data[0], user_data[1], user_data[2], is_admin)
     return None
 
+
+def admin_required(view_func):
+    @wraps(view_func)
+    @login_required
+    def wrapped_view(*args, **kwargs):
+        if not getattr(current_user, "is_admin", False):
+            flash("You do not have permission to access this page.", "error")
+            return redirect(url_for("index"))
+        return view_func(*args, **kwargs)
+
+    return wrapped_view
+
+# API Routes
+@app.route('/api/stats')
+def api_stats():
+    stats_query = """
+        SELECT 
+            (SELECT COUNT(*) FROM Branch) as branch_count,
+            (SELECT COUNT(*) FROM Employee) as employee_count,
+            (SELECT COUNT(*) FROM Project) as project_count,
+            (SELECT COUNT(*) FROM Client) as client_count,
+            (SELECT SUM(Revenue) FROM Project) as total_revenue,
+            (SELECT COUNT(*) FROM Supplier) as supplier_count
+    """
+    myCursor.execute(stats_query)
+    columns = [col[0] for col in myCursor.description]
+    stats = [dict(zip(columns, row)) for row in myCursor.fetchall()]
+    return jsonify(stats[0] if stats else {})
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'Please enter both username and password'}), 400
+    
+    myCursor.execute("SELECT UserID, Username, Email, Password FROM User WHERE Username = %s", (username,))
+    user_data = myCursor.fetchone()
+    
+    if user_data and check_password_hash(user_data[3], password):
+        is_admin = (user_data[1] or "").lower() == "admin"
+        user = User(user_data[0], user_data[1], user_data[2], is_admin)
+        login_user(user)
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_admin': user.is_admin
+            }
+        })
+    else:
+        return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+
+@app.route('/api/logout', methods=['POST'])
+@login_required
+def api_logout():
+    logout_user()
+    return jsonify({'success': True})
+
+@app.route('/api/signup', methods=['POST'])
+def api_signup():
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+    
+    if not username or not email or not password:
+        return jsonify({'success': False, 'message': 'Please fill in all fields'}), 400
+    
+    if password != confirm_password:
+        return jsonify({'success': False, 'message': 'Passwords do not match'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters long'}), 400
+    
+    myCursor.execute("SELECT UserID FROM User WHERE Username = %s OR Email = %s", (username, email))
+    if myCursor.fetchone():
+        return jsonify({'success': False, 'message': 'Username or email already exists'}), 400
+    
+    hashed_password = generate_password_hash(password)
+    myCursor.execute("INSERT INTO User (Username, Email, Password) VALUES (%s, %s, %s)", 
+                    (username, email, hashed_password))
+    myDB.commit()
+    
+    return jsonify({'success': True, 'message': 'Account created successfully! Please log in.'})
+
+# Legacy template routes (for backward compatibility)
 @app.route('/')
 def index():
+    # Check if React build exists, serve it if available
+    react_build_path = os.path.join(project_root, 'static', 'react-build', 'index.html')
+    if os.path.exists(react_build_path):
+        return send_from_directory(os.path.join(project_root, 'static', 'react-build'), 'index.html')
+    # Otherwise serve template
     stats_query = """
         SELECT 
             (SELECT COUNT(*) FROM Branch) as branch_count,
@@ -46,8 +164,29 @@ def index():
     stats = [dict(zip(columns, row)) for row in myCursor.fetchall()]
     return render_template('index.html', stats=stats[0] if stats else {})
 
+
+@app.route('/about')
+def about():
+    # Check if React build exists
+    react_build_path = os.path.join(project_root, 'static', 'react-build', 'index.html')
+    if os.path.exists(react_build_path):
+        return send_from_directory(os.path.join(project_root, 'static', 'react-build'), 'index.html')
+    return render_template('about.html')
+
+
+@app.route('/media/<path:filename>')
+def media(filename):
+    # Serve image files from assets folder
+    assets_path = os.path.join(project_root, 'assets', 'images', 'team')
+    return send_from_directory(assets_path, filename)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Check if React build exists
+    react_build_path = os.path.join(project_root, 'static', 'react-build', 'index.html')
+    if os.path.exists(react_build_path):
+        return send_from_directory(os.path.join(project_root, 'static', 'react-build'), 'index.html')
+    
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     
@@ -63,7 +202,8 @@ def login():
         user_data = myCursor.fetchone()
         
         if user_data and check_password_hash(user_data[3], password):
-            user = User(user_data[0], user_data[1], user_data[2])
+            is_admin = (user_data[1] or "").lower() == "admin"
+            user = User(user_data[0], user_data[1], user_data[2], is_admin)
             login_user(user)
             flash('Login successful!', 'success')
             next_page = request.args.get('next')
@@ -75,6 +215,11 @@ def login():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    # Check if React build exists
+    react_build_path = os.path.join(project_root, 'static', 'react-build', 'index.html')
+    if os.path.exists(react_build_path):
+        return send_from_directory(os.path.join(project_root, 'static', 'react-build'), 'index.html')
+    
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     
@@ -119,7 +264,7 @@ def logout():
     return redirect(url_for('index'))
 
 @app.route('/branches')
-@login_required
+@admin_required
 def branches():
     filter_city = request.args.get('filter_city', '').strip() or None
     
@@ -188,7 +333,7 @@ def delete_branch(branch_id):
     return redirect(url_for('branches'))
 
 @app.route('/employees')
-@login_required
+@admin_required
 def employees():
     filter_branch = request.args.get('filter_branch', '').strip() or None
     filter_department = request.args.get('filter_department', '').strip() or None
@@ -312,7 +457,7 @@ def delete_employee(employee_id):
     return redirect(url_for('employees'))
 
 @app.route('/departments')
-@login_required
+@admin_required
 def departments():
     filter_manager = request.args.get('filter_manager', '').strip() or None
     
@@ -389,7 +534,7 @@ def delete_department(dept_id):
     return redirect(url_for('departments'))
 
 @app.route('/clients')
-@login_required
+@admin_required
 def clients():
     filter_has_projects = request.args.get('filter_has_projects', '').strip() or None
     
@@ -448,7 +593,7 @@ def delete_client(client_id):
     return redirect(url_for('clients'))
 
 @app.route('/projects')
-@login_required
+@admin_required
 def projects():
     filter_type = request.args.get('filter_type', '').strip() or None
     filter_branch = request.args.get('filter_branch', '').strip() or None
@@ -503,7 +648,7 @@ def projects():
                          sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/projects/<int:project_id>')
-@login_required
+@admin_required
 def project_details(project_id):
     query = """
         SELECT p.*, b.BranchName, c.ClientName
@@ -630,7 +775,7 @@ def delete_project(project_id):
     return redirect(url_for('projects'))
 
 @app.route('/suppliers')
-@login_required
+@admin_required
 def suppliers():
     filter_has_materials = request.args.get('filter_has_materials', '').strip() or None
     
@@ -689,7 +834,7 @@ def delete_supplier(supplier_id):
     return redirect(url_for('suppliers'))
 
 @app.route('/materials')
-@login_required
+@admin_required
 def materials():
     filter_unit = request.args.get('filter_unit', '').strip() or None
     sort_by = request.args.get('sort_by', 'MaterialName')
@@ -762,7 +907,7 @@ def delete_material(material_id):
     return redirect(url_for('materials'))
 
 @app.route('/work_assignments')
-@login_required
+@admin_required
 def work_assignments():
     query = """
         SELECT wa.*, p.ProjectName, e.EmployeeName, r.Title as Position
@@ -837,7 +982,7 @@ def delete_work_assignment(assignment_id):
     return redirect(url_for('work_assignments'))
 
 @app.route('/project_materials')
-@login_required
+@admin_required
 def project_materials():
     filter_project = request.args.get('filter_project', '').strip() or None
     filter_material = request.args.get('filter_material', '').strip() or None
@@ -937,7 +1082,7 @@ def delete_project_material(project_material_id):
     return redirect(url_for('project_materials'))
 
 @app.route('/supplier_materials')
-@login_required
+@admin_required
 def supplier_materials():
     filter_supplier = request.args.get('filter_supplier', '').strip() or None
     filter_material = request.args.get('filter_material', '').strip() or None
@@ -1030,7 +1175,7 @@ def delete_supplier_material(supplier_material_id):
     return redirect(url_for('supplier_materials'))
 
 @app.route('/contracts')
-@login_required
+@admin_required
 def contracts():
     filter_status = request.args.get('filter_status', '').strip() or None
     filter_project = request.args.get('filter_project', '').strip() or None
@@ -1131,7 +1276,7 @@ def delete_contract(contract_id):
     return redirect(url_for('contracts'))
 
 @app.route('/phases')
-@login_required
+@admin_required
 def phases():
     filter_project = request.args.get('filter_project', '').strip() or None
     filter_status = request.args.get('filter_status', '').strip() or None
@@ -1221,7 +1366,7 @@ def delete_phase(phase_id):
     return redirect(url_for('phases'))
 
 @app.route('/schedules')
-@login_required
+@admin_required
 def schedules():
     filter_project = request.args.get('filter_project', '').strip() or None
     filter_phase = request.args.get('filter_phase', '').strip() or None
@@ -1312,7 +1457,7 @@ def delete_schedule(schedule_id):
     return redirect(url_for('schedules'))
 
 @app.route('/sales')
-@login_required
+@admin_required
 def sales():
     filter_project = request.args.get('filter_project', '').strip() or None
     filter_client = request.args.get('filter_client', '').strip() or None
@@ -1411,7 +1556,7 @@ def delete_sale(sale_id):
     return redirect(url_for('sales'))
 
 @app.route('/purchases')
-@login_required
+@admin_required
 def purchases():
     filter_supplier = request.args.get('filter_supplier', '').strip() or None
     filter_material = request.args.get('filter_material', '').strip() or None
@@ -1505,7 +1650,7 @@ def delete_purchase(purchase_id):
     return redirect(url_for('purchases'))
 
 @app.route('/payments')
-@login_required
+@admin_required
 def payments():
     filter_type = request.args.get('filter_type', '').strip() or None
     filter_client = request.args.get('filter_client', '').strip() or None
@@ -1605,7 +1750,7 @@ def delete_payment(payment_id):
     return redirect(url_for('payments'))
 
 @app.route('/all_queries')
-@login_required
+@admin_required
 def all_queries():
     queries = [
         {
@@ -1648,7 +1793,7 @@ def all_queries():
     return render_template('all_queries.html', queries=queries)
 
 @app.route('/query/project_profit')
-@login_required
+@admin_required
 def query_project_profit():
     query = """
         SELECT p.ProjectID, p.ProjectName, p.Revenue, p.Cost, 
@@ -1661,7 +1806,7 @@ def query_project_profit():
     return render_template('query_profitability.html', results=results)
 
 @app.route('/query/supplier_projects')
-@login_required
+@admin_required
 def query_supplier_projects():
     query = """
         SELECT s.SupplierID, s.SupplierName, COUNT(ps.ProjectID) as ProjectCount
@@ -1675,7 +1820,7 @@ def query_supplier_projects():
     return render_template('query_supplier_impact.html', results=results)
 
 @app.route('/query/material_spending')
-@login_required
+@admin_required
 def query_material_spending():
     query = """
         SELECT m.MaterialID, m.MaterialName, SUM(pm.Quantity * pm.UnitPrice) as TotalSpend
@@ -1689,7 +1834,7 @@ def query_material_spending():
     return render_template('query_cost_driver_materials.html', results=results)
 
 @app.route('/query/employee_hours')
-@login_required
+@admin_required
 def query_employee_hours():
     query = """
         SELECT e.EmployeeID, e.EmployeeName, SUM(wa.HoursWorked) as TotalHours
@@ -1703,7 +1848,7 @@ def query_employee_hours():
     return render_template('query_employee_utilization.html', results=results)
 
 @app.route('/query/high_prices')
-@login_required
+@admin_required
 def query_high_prices():
     query = """
         SELECT pm.ProjectID, p.ProjectName, m.MaterialName, pm.UnitPrice, MIN(sm.Price) as MinPrice
@@ -1720,7 +1865,7 @@ def query_high_prices():
     return render_template('query_price_anomalies.html', results=results)
 
 @app.route('/query/branch_revenue')
-@login_required
+@admin_required
 def query_branch_revenue():
     query = """
         SELECT b.BranchID, b.BranchName, b.City, COUNT(p.ProjectID) as ProjectCount, SUM(p.Revenue) as TotalRevenue
@@ -1732,6 +1877,14 @@ def query_branch_revenue():
     myCursor.execute(query)
     results = [dict(zip([c[0] for c in myCursor.description], r)) for r in myCursor.fetchall()]
     return render_template('query_branch_performance.html', results=results)
+
+# Serve React app for all routes (SPA routing)
+@app.route('/<path:path>')
+def serve_react(path):
+    react_build_path = os.path.join(project_root, 'static', 'react-build', 'index.html')
+    if os.path.exists(react_build_path):
+        return send_from_directory(os.path.join(project_root, 'static', 'react-build'), 'index.html')
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

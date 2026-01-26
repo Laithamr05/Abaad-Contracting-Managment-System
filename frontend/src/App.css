@@ -1,0 +1,36 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Ensure consistent container max-width */
+.container {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Prevent horizontal overflow */
+body {
+  overflow-x: hidden;
+}
+
+/* Consistent section spacing */
+section {
+  width: 100%;
+}
+
+/* RTL support for app container */
+[dir="rtl"] .app-container {
+  direction: rtl;
+}
